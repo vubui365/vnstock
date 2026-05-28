@@ -1,16 +1,72 @@
 # ════════════════════════════════════════════════════════════
 # robots.txt — Vnstock.io.vn
-# Cập nhật: 2026-04-29
+# Cập nhật: 2026-05-23
 # ════════════════════════════════════════════════════════════
 
 # ── Default rules cho mọi bot ──
 User-agent: *
 Allow: /
 Allow: /app
-Allow: /bai-viet/
+Allow: /blog/
+Allow: /stock/
 Allow: /tinh-nang/
+Allow: /indicator/
+Allow: /screener/
+Allow: /glossary/
+Allow: /strategies/
+Allow: /markets/
+Allow: /best/
+Allow: /tools/
+Allow: /recap
+Allow: /weekly
+Allow: /yearly-review/
+Allow: /events
+Allow: /compare-stocks/
+Allow: /guide/
+Allow: /about
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+Allow: /pricing
+Allow: /changelog
+Allow: /developer
+Allow: /search
+Allow: /editorial-policy
+Allow: /methodology
+Allow: /author/
+Allow: /api/scan/
+Allow: /api/market-snapshot.json
+Disallow: /search?q=
+Allow: /en/
+Allow: /en/glossary/
+Allow: /en/markets/
+Allow: /en/strategies/
+Allow: /en/best/
+Allow: /og/
+Allow: /stocks-with-rsi-under-30
+Allow: /stocks-with-rsi-above-70
+Allow: /top-ai-buy-signals
+Allow: /top-ai-sell-signals
+Allow: /macd-bullish-cross
+Allow: /stocks-breakout-volume
+Allow: /golden-cross-ema50-200
+Allow: /death-cross-ema50-200
+Allow: /top-high-score-stocks
+Allow: /penny-stocks-under-10k
+Allow: /co-phieu-co-tuc-cao
+Allow: /large-cap-vn30
+Allow: /stocks-near-52-week-high
+Allow: /stocks-near-52-week-low
+Allow: /compare/
+Allow: /sectors/
+Allow: /rss.xml
 Allow: /icons/
 Allow: /sitemap.xml
+Allow: /sitemap-index.xml
+Allow: /sitemap-stocks.xml
+Allow: /sitemap-blog.xml
+Allow: /sitemap-pages.xml
+Allow: /sitemap-news.xml
 
 # Block sensitive routes
 Disallow: /api/admin
@@ -77,7 +133,6 @@ Allow: /
 Disallow: /api/admin
 
 # ── Block AI scrapers (tránh leak content cho LLM training) ──
-# Theo OpenAI's documentation: User-agent GPTBot
 User-agent: GPTBot
 Disallow: /
 
@@ -112,5 +167,10 @@ Disallow: /
 User-agent: DotBot
 Disallow: /
 
-# ── Sitemap location ──
+# ── Sitemap locations ──
+Sitemap: https://vnstock.io.vn/sitemap-index.xml
+Sitemap: https://vnstock.io.vn/sitemap-stocks.xml
+Sitemap: https://vnstock.io.vn/sitemap-blog.xml
+Sitemap: https://vnstock.io.vn/sitemap-pages.xml
+Sitemap: https://vnstock.io.vn/sitemap-news.xml
 Sitemap: https://vnstock.io.vn/sitemap.xml
