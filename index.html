@@ -21,7 +21,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>vnstock.io.vn — Phân Tích Kĩ Thuật Chứng Khoán Việt Nam | Giá Realtime, Tín Hiệu Mua Bán, Lọc Cổ Phiếu AI
+  <title>Vnstock App - Bộ Lọc Cổ Phiếu AI & Phân Tích Chứng Khoán Trực Tuyến | Giá Realtime, Tín Hiệu Mua Bán.
   </title>
   <link rel="icon" type="image/png" href="/icons/pwa-icon-512.png">
   <link rel="shortcut icon" href="/icons/pwa-icon-512.png">
@@ -854,37 +854,24 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
       overflow: hidden
     }
 
-    /* Body bảng giá: hiển thị mặc định 30 mã, còn lại dùng scrollbar — yêu cầu user 2026-04 */
+    /* Watchlist: fixed height vừa 20 dòng/trang, KHÔNG dùng thanh trượt bên trong.
+       User yêu cầu 2026-05: muốn xem giao diện liền mạch — khi cần cuộn thì
+       cuộn cả trang web chứ không cuộn trong khung. */
+    .twrap {
+      display: flex;
+      flex-direction: column;
+      /* bỏ max-height: calc(100vh - 80px) — khung tự co giãn theo nội dung */
+    }
     #tbody {
-      max-height: calc(100vh - 280px);
-      overflow-y: auto;
-      overflow-x: hidden;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent
+      flex: 1;
+      overflow: visible;     /* tắt scroll bên trong, 20 dòng hiện đủ */
+      /* không set max-height/min-height nữa */
     }
-
-    #tbody::-webkit-scrollbar {
-      width: 8px
-    }
-
-    #tbody::-webkit-scrollbar-track {
-      background: transparent
-    }
-
-    #tbody::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px
-    }
-
-    #tbody::-webkit-scrollbar-thumb:hover {
-      background: var(--accent)
-    }
-
-    @media(max-width:768px) {
-      #tbody {
-        max-height: calc(100vh - 220px)
-      }
-    }
+    /* Ẩn scrollbar (giữ rule để bật lại sau nếu cần) */
+    #tbody::-webkit-scrollbar { width: 0; height: 0; }
+    #tbody::-webkit-scrollbar-track { background: transparent }
+    #tbody::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px }
+    #tbody::-webkit-scrollbar-thumb:hover { background: var(--accent) }
 
     .thead {
       display: grid;
@@ -1097,12 +1084,26 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
       border-color: var(--border)
     }
 
-    /* DOTS */
+    /* DOTS — 25 indicator badges, hidden by default (collapsed view) */
     .dots {
       display: flex;
       gap: 2px;
-      flex-wrap: wrap
+      flex-wrap: wrap;
     }
+    /* Compact mode: ẩn 25 chỉ báo, chỉ show score */
+    body.compact-indicators .dots {
+      display: none !important;
+    }
+    body.compact-indicators .dots-toggle-hint {
+      display: inline-block;
+      font-size: 9px;
+      color: var(--sub);
+      cursor: pointer;
+      padding: 2px 4px;
+      border: 1px dashed var(--border);
+      border-radius: 3px;
+    }
+    .dots-toggle-hint { display: none; }
 
     .dot {
       width: 16px;
@@ -6581,7 +6582,10 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
           <div class="th">OHLC / Vol</div>
           <div class="th" onclick="srt('change')">±%<span id="s-change"></span></div>
           <div class="th" onclick="srt('score')">Điểm</div>
-          <div class="th">25 Chỉ báo</div>
+          <div class="th" onclick="toggleCompactIndicators()" style="cursor:pointer;user-select:none" title="Click để thu gọn/mở rộng">
+            <span id="indicators-toggle-label">25 Chỉ báo</span>
+            <span id="indicators-toggle-icon" style="font-size:9px;color:var(--accent);margin-left:2px">▼</span>
+          </div>
           <div class="th" onclick="srt('signal')">Tín hiệu<span id="s-signal"></span></div>
           <div class="th">Confluence</div>
           <div class="th"></div>
@@ -10298,7 +10302,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
     let mdlChart = null, btChartObj = null, mdlSym = null, chartMode = 'candle'
     let _intradayInterval = '5m'  // default interval
     let rtTimer = null, alerts = [], soundOn = localStorage.getItem('sma_sound') !== 'off', _notified = {}
-    let curPage = 1, pageSize = 30, filterText = '', filterSig = 'ALL'   // mặc định 30 mã/trang theo yêu cầu user 2026-04
+    let curPage = 1, pageSize = 20, filterText = '', filterSig = 'ALL'   // mặc định 20 mã/trang — khớp khung fixed height, không scroll (user 2026-05)
 
     // ── AUDIO ──
     let audioCtx = null
@@ -10315,7 +10319,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       if (document.hidden) {
         document.title = "Tín hiệu mới tại vnstock.io.vn...";
       } else {
-        document.title = "vnstock.io.vn | Phân tích chứng khoán";
+        document.title = "Vnstock App - Bộ Lọc Cổ Phiếu AI & Phân Tích Chứng Khoán Trực Tuyến";
       }
     });
 
@@ -10352,6 +10356,124 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
     // api() defined above with auth
 
     // ── INIT ──
+    // ── Compact indicators toggle (Q2 — chỉ show score, click mở rộng) ──
+    function _updateToggleUI() {
+      const isCompact = document.body.classList.contains('compact-indicators');
+      const lbl = document.getElementById('indicators-toggle-label');
+      const ico = document.getElementById('indicators-toggle-icon');
+      if (lbl) lbl.textContent = isCompact ? '25 Chỉ báo' : '25 Chỉ báo';
+      if (ico) ico.textContent = isCompact ? '▼' : '▲';
+    }
+    function toggleCompactIndicators() {
+      const isCompact = document.body.classList.toggle('compact-indicators');
+      try { localStorage.setItem('vnstock_compact_indicators', isCompact ? '1' : '0'); } catch(e){}
+      _updateToggleUI();
+      if (window.toast) toast(isCompact ? '✅ Đã thu gọn 25 chỉ báo (click ▼ để mở)' : '✅ Đã mở rộng 25 chỉ báo (click ▲ để thu gọn)', 'ok', 2000);
+    }
+    // Default: compact mode ON
+    (function applyCompactDefault(){
+      try {
+        const saved = localStorage.getItem('vnstock_compact_indicators');
+        if (saved === null || saved === '1') {
+          document.body.classList.add('compact-indicators');
+          if (saved === null) localStorage.setItem('vnstock_compact_indicators', '1');
+        }
+      } catch(e){}
+      // Update icon ngay khi DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _updateToggleUI);
+      } else { _updateToggleUI(); }
+    })();
+
+    // ── Realtime tick-by-tick WebSocket client (TCBS WS push) ─────────
+    // Connect tới /ws → nginx proxy port 10000 → ws_handler broadcasts tick
+    // Khi nhận price_update → update row trong watchlist liền (KHÔNG đợi 3.5s queue)
+    (function connectRealtimeWS(){
+      let _ws = null, _reconnectAttempt = 0, _wsReady = false;
+      function _statusUpdate(connected) {
+        _wsReady = connected;
+        try {
+          const el = document.getElementById('vnsbar');
+          if (el && connected) {
+            el.style.background = 'linear-gradient(90deg,rgba(0,230,118,.1),transparent)';
+            const txt = document.getElementById('vns-txt');
+            if (txt) txt.innerHTML = '✅ Realtime tick-by-tick (TCBS WebSocket)';
+            setTimeout(() => { if (el) el.style.display = 'none'; }, 4000);
+          }
+        } catch(e){}
+      }
+      function _updateRow(sym, price, chg, vol) {
+        // Find row by data-sym attribute
+        const row = document.querySelector(`.trow[data-sym="${sym}"]`);
+        if (!row) return;
+        const priceEl = row.querySelector('[data-field="price"]');
+        const chgEl = row.querySelector('[data-field="chg"]');
+        if (priceEl) {
+          const oldPrice = parseFloat(priceEl.textContent.replace(/[^\d.]/g,''));
+          const newPrice = parseFloat(price);
+          priceEl.textContent = (sym.length === 3 ? Math.round(newPrice).toLocaleString('vi') + 'đ' : '$' + newPrice.toFixed(2));
+          // Flash effect
+          if (oldPrice && newPrice !== oldPrice) {
+            const flash = newPrice > oldPrice ? 'rgba(0,230,118,.25)' : 'rgba(240,48,80,.25)';
+            priceEl.style.transition = 'background 0.6s';
+            priceEl.style.background = flash;
+            setTimeout(() => { priceEl.style.background = 'transparent'; }, 600);
+          }
+        }
+        if (chgEl) {
+          const chgVal = parseFloat(chg);
+          chgEl.innerHTML = (chgVal >= 0 ? '▲' : '▼') + Math.abs(chgVal).toFixed(2) + '%';
+          chgEl.style.color = chgVal >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+        // Update cache nếu có
+        if (window.sd && window.sd[sym]) {
+          window.sd[sym].price = price;
+          window.sd[sym].chg = chg;
+          window.sd[sym].vol = vol;
+          window.sd[sym]._tcbs_rt = true;
+          window.sd[sym]._rt_ts = Date.now() / 1000;
+        }
+      }
+      function _connect() {
+        try {
+          const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const url = `${proto}//${location.host}/ws`;
+          _ws = new WebSocket(url);
+          _ws.onopen = function() {
+            _reconnectAttempt = 0;
+            console.log('[WS] Connected to', url);
+            _statusUpdate(true);
+          };
+          _ws.onmessage = function(e) {
+            try {
+              const msg = JSON.parse(e.data);
+              if (msg.type === 'price_update' && msg.symbol) {
+                _updateRow(msg.symbol, msg.price, msg.chg, msg.vol);
+              }
+            } catch(err) { /* ignore parse errors */ }
+          };
+          _ws.onclose = function() {
+            _statusUpdate(false);
+            // Reconnect with exponential backoff: 1s, 2s, 4s, ..., max 30s
+            const delay = Math.min(30000, 1000 * Math.pow(2, _reconnectAttempt++));
+            setTimeout(_connect, delay);
+          };
+          _ws.onerror = function(err) {
+            console.warn('[WS] Error:', err);
+          };
+        } catch(err) {
+          console.warn('[WS] Connect failed:', err);
+          setTimeout(_connect, 5000);
+        }
+      }
+      // Start after DOM ready + small delay (let initial fetch complete)
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(_connect, 1500));
+      } else {
+        setTimeout(_connect, 1500);
+      }
+    })();
+
     async function init() {
       // Thử auth — nếu đã login thì load user data, nếu chưa thì vẫn cho xem free
       const ok = await checkAuth()
@@ -10370,7 +10492,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       }
       // Load settings
       const s = (await api('GET', '/api/settings').catch(() => null)) || {}
-      if (s.page_size) { pageSize = parseInt(s.page_size) || 30; document.getElementById('pgsz').value = pageSize; const sp = document.getElementById('set-pgsize'); if (sp) sp.value = pageSize }
+      if (s.page_size) { pageSize = parseInt(s.page_size) || 20; document.getElementById('pgsz').value = pageSize; const sp = document.getElementById('set-pgsize'); if (sp) sp.value = pageSize }
       if (s.alert_threshold) document.getElementById('set-thresh').value = s.alert_threshold
       if (s.tg_token) document.getElementById('tg-token').value = s.tg_token
       if (s.tg_chat_id) document.getElementById('tg-chat').value = s.tg_chat_id
@@ -10777,7 +10899,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       </div>
       <div style="font-weight:700;font-size:11px;color:${chg >= 0 ? 'var(--green)' : 'var(--red)'}">${chg >= 0 ? '▲' : '▼'}${Math.abs(chg).toFixed(2)}%</div>
       <div><div data-field="score" style="font-family:var(--mono);font-weight:800;font-size:17px;color:${col}">${tot > 0 ? '+' : ''}${tot}</div><div data-field="sbar" class="score-bar">${sbar}</div><div style="font-size:9px;color:var(--sub)">${a?.confidence || 0}%</div></div>
-      <div class="dots">${dots}</div>
+      <div class="dots-cell"><div class="dots">${dots}</div><span class="dots-toggle-hint" onclick="event.stopPropagation();toggleCompactIndicators()" title="Click để hiện 25 chỉ báo">▼ 25 chỉ báo</span></div>
       <div data-field="sig" class="sig s-${sig}">${SIG_LBL[sig]?.replace('_LOWVOL', '') || sig}</div>
       <div style="text-align:center"><div style="font-family:var(--mono);font-weight:800;font-size:14px;color:${cfCol}">${cf > 0 ? '+' : ''}${cf}</div><div style="font-size:8px;color:${cfCol}">${cfLabel}</div></div>
       <div style="display:flex;gap:2px" onclick="event.stopPropagation()">
@@ -11484,7 +11606,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       const pgsize = document.getElementById('set-pgsize').value
       const puburl = document.getElementById('set-puburl').value.trim().replace(/\/+$/, '')
       await api('POST', '/api/settings', { alert_threshold: thresh, page_size: pgsize, public_url: puburl })
-      pageSize = parseInt(pgsize) || 30; document.getElementById('pgsz').value = pageSize
+      pageSize = parseInt(pgsize) || 20; document.getElementById('pgsz').value = pageSize
       renderTable(); toast('💾 Đã lưu cài đặt', 'success', 2000)
     }
 
@@ -25006,11 +25128,16 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
           ${p.id === 'yearly' ? '<div style="font-size:9px;color:var(--green);margin-top:4px">🔥 Tiết kiệm nhất</div>' : ''}
         </div>`).join('')}
     </div>
-    <button onclick="_proceedPayment()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:10px">
-      💳 Thanh toán ngay
-    </button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <button onclick="_proceedPayment('payos')" id="payBtnPayos" style="padding:12px 8px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:800;cursor:pointer">
+        💳 PayOS<br><span style="font-size:9px;font-weight:400;opacity:.85">BIDV · Tự động</span>
+      </button>
+      <button onclick="_proceedPayment('vietqr')" id="payBtnVietqr" style="padding:12px 8px;border-radius:10px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:13px;font-weight:800;cursor:pointer">
+        🏦 VietQR<br><span style="font-size:9px;font-weight:400;opacity:.85">MSB · Auto-confirm</span>
+      </button>
+    </div>
     <div style="text-align:center;font-size:10px;color:var(--sub)">
-      Hỗ trợ: Chuyển khoản ngân hàng · VietQR · PayOS
+      🆓 Cả 2 đều miễn phí phí giao dịch · Tự động active sau khi chuyển khoản
     </div>
     <div id="payResult" style="margin-top:12px"></div>`
 
@@ -25027,10 +25154,10 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       })
     }
 
-    async function _proceedPayment() {
+    async function _proceedPayment(method) {
+      method = method || 'payos'  // default backward-compat
       if (!_selectedPlan) {
         toast('⚠️ Vui lòng chọn gói bên trên', 'warn', 3000)
-        // Highlight plan cards to draw attention
         document.querySelectorAll('[id^="plan_"]').forEach(el => {
           el.style.animation = 'none'
           el.style.borderColor = 'var(--orange)'
@@ -25039,10 +25166,12 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         return
       }
       if (!_user) { toast('Đăng nhập trước khi thanh toán', 'warn'); openLoginModal(); return }
-      const btn = document.querySelector('[onclick="_proceedPayment()"]')
-      if (btn) { btn.textContent = '⏳ Đang tạo đơn...'; btn.disabled = true }
-      const r = await api('POST', '/api/payment/create', { plan_id: _selectedPlan }).catch(() => null)
-      if (btn) { btn.textContent = '💳 Thanh toán ngay'; btn.disabled = false }
+      const btnId = method === 'vietqr' ? 'payBtnVietqr' : 'payBtnPayos'
+      const btn = document.getElementById(btnId)
+      const origHtml = btn ? btn.innerHTML : ''
+      if (btn) { btn.innerHTML = '⏳ Đang tạo...'; btn.disabled = true }
+      const r = await api('POST', '/api/payment/create', { plan_id: _selectedPlan, method: method }).catch(() => null)
+      if (btn) { btn.innerHTML = origHtml; btn.disabled = false }
 
       const res = document.getElementById('payResult')
       if (!res) return
@@ -28503,12 +28632,26 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       };
       window.acScan = async function (id) {
         if (window.toast) window.toast('⏳ Đang quét...', 'info', 2000);
-        const scan = await window.api('GET', '/api/custom_signals/scan/' + id).catch(() => null);
-        if (!scan || scan.error) { alert('Lỗi: ' + (scan?.error || '')); return; }
+        const scan = await window.api('GET', '/api/custom_signals/scan/' + id).catch(e => ({error: 'Network: ' + e}));
+        if (!scan) { alert('❌ Không có response từ server'); return; }
+        if (scan.error) {
+          alert('❌ Lỗi: ' + scan.error +
+                '\n\nNguyên nhân thường gặp:' +
+                '\n- Watchlist trống → vào tab Bảng giá thêm mã trước' +
+                '\n- Chưa đăng nhập → đăng nhập lại');
+          return;
+        }
+        const total = scan.total_checked || 0;
+        if (total === 0) {
+          alert('⚠️ Đã quét 0 mã!\n\n' +
+                'Nguyên nhân: Watchlist của bạn TRỐNG.\n\n' +
+                'Cách fix: Vào tab "📋 Bảng giá" → thêm mã vào watchlist → quay lại scan.');
+          return;
+        }
         const msg = scan.hits.length
-          ? '✅ ' + scan.hit_count + ' mã khớp: ' + scan.hits.slice(0, 5).map(h => h.symbol).join(', ') + (scan.hit_count > 5 ? '...' : '')
-          : 'Không có mã nào khớp (' + scan.total_checked + ' mã đã kiểm tra)';
-        if (window.toast) window.toast(msg, scan.hits.length ? 'success' : 'info', 4000);
+          ? `✅ ${scan.hit_count}/${total} mã khớp: ${scan.hits.slice(0, 8).map(h => h.symbol + '(' + (h.score>0?'+':'') + h.score + ')').join(', ')}${scan.hit_count > 8 ? '...' : ''}`
+          : `📊 Quét ${total} mã — không có mã nào khớp điều kiện. Thử nới điều kiện hoặc đợi thị trường thay đổi.`;
+        if (window.toast) window.toast(msg, scan.hits.length ? 'success' : 'info', 6000);
         else alert(msg);
       };
       window.acDelMine = async function (id) {
