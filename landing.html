@@ -28,8 +28,13 @@
 <meta name="google-site-verification" content="S9O2O-tqdsB0ky4znr3qLiwjsLDuZutCj1rswM3NWYs" />
 <!-- <meta name="coccoc-site-verification" content="REPLACE_WITH_COCCOC_CODE"/> -->
 <meta name="msvalidate.01" content="2BC9029715231DED322AEDB5A5B32622" />
+<!-- Google Search Console verification — set via /admin/seo-dashboard -->
+<!-- <meta name="google-site-verification" content="YOUR_CODE_HERE"/> -->
 <meta name="author" content="vnstock.io.vn"/>
 <link rel="canonical" href="https://vnstock.io.vn/"/>
+<link rel="alternate" hreflang="vi" href="https://vnstock.io.vn/"/>
+<link rel="alternate" hreflang="en" href="https://vnstock.io.vn/en/"/>
+<link rel="alternate" hreflang="x-default" href="https://vnstock.io.vn/"/>
 <link rel="icon" href="/icons/favicon.png" type="image/png"/>
 <meta property="og:type" content="website"/>
 <meta property="og:title" content="Vnstock.io.vn — Phân Tích chứng khoán AI | Bảng Giá Realtime VN30"/>
@@ -44,25 +49,102 @@
 <meta name="twitter:image" content="https://vnstock.io.vn/icons/preview.png"/>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Vnstock.io.vn","alternateName":"Stock Market Analyzer Pro","description":"Nền tảng phân tích kỹ thuật chứng khoán Việt Nam với AI. Giá realtime, tín hiệu mua bán, screener, backtest, danh mục đầu tư.","applicationCategory":"FinanceApplication","operatingSystem":"Web, iOS, Android (PWA)","url":"https://vnstock.io.vn","offers":{"@type":"Offer","price":"299000","priceCurrency":"VND","priceValidUntil":"2027-12-31"},"featureList":["Bảng giá realtime VN30 HNX UPCOM","Tín hiệu mua bán AI","Quant Lab GARCH VaR Monte Carlo Kelly","Smart Money Flow phát hiện cá mập","Swarm Simulation 1000 nhà đầu tư ảo","AI Continuous Analyst","Multi-Timeframe Synced Chart","Screener đa nhân tố","AFL Backtest + Community","Trading Journal AI Coach","Catalyst News Alerts","Foreign Flow tracking 23 ngành 456 mã"],"inLanguage":"vi","aggregateRating":{"@type":"AggregateRating","ratingValue":"4.8","ratingCount":"127"},"audience":{"@type":"Audience","audienceType":"Nhà đầu tư chứng khoán Việt Nam"}}</script>
 
-<!-- ── GOOGLE ANALYTICS 4 + GOOGLE TAG MANAGER ─────────────────────────-->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-0SDCXBWFZP"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-0SDCXBWFZP');
-</script>
-<!-- Google Tag Manager -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-5H53BXJ5');</script>
-<!-- End Google Tag Manager -->
+<!-- ── FinancialService schema (rich results cho fintech queries) ── -->
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FinancialService","name":"Vnstock.io.vn","alternateName":"Vnstock — Phân tích chứng khoán AI","description":"Dịch vụ phân tích chứng khoán Việt Nam với AI: realtime quotes, technical indicators, AI signals, screener, backtest, portfolio tracking.","url":"https://vnstock.io.vn","logo":"https://vnstock.io.vn/icons/favicon.png","image":"https://vnstock.io.vn/icons/preview.png","priceRange":"Free (basic) - 299.000 VND/month (premium)","areaServed":[{"@type":"Country","name":"Vietnam"},{"@type":"Country","name":"United States"},{"@type":"Country","name":"Global"}],"serviceType":["Stock Market Analysis","Technical Analysis","AI Trading Signals","Portfolio Management","Backtesting","Stock Screening"],"availableLanguage":["vi","en"],"feesAndCommissionsSpecification":"Phần lớn dịch vụ miễn phí. Premium 299.000 VND/tháng cho advanced features.","provider":{"@type":"Organization","name":"Vnstock.io.vn","url":"https://vnstock.io.vn","logo":"https://vnstock.io.vn/icons/favicon.png"}}</script>
 
+<!-- ── Organization schema (Knowledge Graph entity) ── -->
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Vnstock.io.vn","alternateName":["Vnstock","Stock Market Analyzer Pro"],"url":"https://vnstock.io.vn","logo":{"@type":"ImageObject","url":"https://vnstock.io.vn/icons/favicon.png","width":512,"height":512},"image":"https://vnstock.io.vn/icons/preview.png","description":"Nền tảng phân tích chứng khoán AI hàng đầu Việt Nam — realtime data, AI signals, screener, backtest, portfolio.","sameAs":["https://twitter.com/vnstock_io","https://www.facebook.com/vnstock.io.vn","https://www.youtube.com/@vnstock"],"contactPoint":{"@type":"ContactPoint","contactType":"Customer Support","availableLanguage":["Vietnamese","English"]},"foundingDate":"2024-09-01","areaServed":"VN","knowsAbout":["Stock Market","Technical Analysis","AI Trading","Vietnamese Stocks","HOSE","HNX","UPCOM","VN30","Cryptocurrency","Bitcoin","Ethereum"]}</script>
+
+<!-- ── WebSite schema với SearchAction (Google Sitelinks Search Box) ── -->
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Vnstock.io.vn","alternateName":"Vnstock","url":"https://vnstock.io.vn","description":"Phân tích chứng khoán AI Việt Nam — bảng giá realtime, screener, backtest, portfolio.","inLanguage":"vi","publisher":{"@type":"Organization","name":"Vnstock.io.vn"},"potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://vnstock.io.vn/stock/{search_term_string}"},"query-input":"required name=search_term_string"}}</script>
+
+<!-- ── 🚀 CORE WEB VITALS optimizations ─────────────────────────────── -->
+<!-- Preconnect to font CDN early -->
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<!-- DNS prefetch for analytics (lower priority than fonts) -->
+<link rel="dns-prefetch" href="https://www.googletagmanager.com"/>
+<link rel="dns-prefetch" href="https://www.google-analytics.com"/>
+<!-- Preload LCP hero logo -->
+<link rel="preload" as="image" href="/icons/pwa-icon-192.png" fetchpriority="high"/>
+<!-- Font CSS with font-display:swap (already in URL) -->
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+
+<!-- ── GOOGLE ANALYTICS 4 + GTM — DEFERRED để không block LCP ─────── -->
+<!-- Load analytics sau idle để không block render -->
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-0SDCXBWFZP', {send_page_view: true});
+// Defer GA/GTM scripts đến sau LCP / first user interaction
+function vsLoadAnalytics(){
+  if (window.__vsAnalyticsLoaded) return;
+  window.__vsAnalyticsLoaded = true;
+  // GA4
+  var ga = document.createElement('script');
+  ga.async = true; ga.src = 'https://www.googletagmanager.com/gtag/js?id=G-0SDCXBWFZP';
+  document.head.appendChild(ga);
+  // GTM
+  (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+    var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+    j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
+    f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-5H53BXJ5');
+}
+// Load sau khi page idle OR user tương tác (whichever comes first)
+if ('requestIdleCallback' in window) {
+  requestIdleCallback(vsLoadAnalytics, {timeout: 3000});
+} else {
+  setTimeout(vsLoadAnalytics, 1500);
+}
+['mousedown','touchstart','keydown','scroll'].forEach(function(ev){
+  window.addEventListener(ev, vsLoadAnalytics, {once: true, passive: true});
+});
+
+// ── 📊 Core Web Vitals reporting → GA4 (monitor improvements) ──
+(function(){
+  if (!('PerformanceObserver' in window)) return;
+  function report(name, value, id){
+    try {
+      gtag('event', name, {
+        event_category: 'Web Vitals',
+        value: Math.round(name === 'CLS' ? value * 1000 : value),
+        metric_id: id || '',
+        non_interaction: true,
+      });
+    } catch(e){}
+  }
+  // LCP
+  try {
+    new PerformanceObserver(function(list){
+      var entries = list.getEntries();
+      var last = entries[entries.length - 1];
+      report('LCP', last.startTime);
+    }).observe({type: 'largest-contentful-paint', buffered: true});
+  } catch(e){}
+  // CLS
+  try {
+    var clsValue = 0;
+    new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(entry){
+        if (!entry.hadRecentInput) clsValue += entry.value;
+      });
+      report('CLS', clsValue);
+    }).observe({type: 'layout-shift', buffered: true});
+  } catch(e){}
+  // FID / INP (Event Timing API)
+  try {
+    new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(entry){
+        if (entry.processingStart) {
+          var inp = entry.processingStart - entry.startTime;
+          report('INP', inp, entry.name);
+        }
+      });
+    }).observe({type: 'event', buffered: true, durationThreshold: 16});
+  } catch(e){}
+})();
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -237,6 +319,8 @@ footer{background:var(--surf);border-top:1px solid var(--border);padding:48px 24
 .fade-in{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
 .fade-in.visible{opacity:1;transform:none}
 </style>
+<!-- Auto-update notifier: poll /api/version, show banner khi deploy mới -->
+<script src="/api/update-checker.js" defer></script>
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -245,7 +329,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 <nav>
   <a href="/" class="nav-logo">
-    <div class="nav-logo-ico"><img src="/icons/pwa-icon-192.png" alt="vnstock.io.vn"/></div>
+    <div class="nav-logo-ico"><img src="/icons/pwa-icon-192.png" alt="vnstock.io.vn" width="36" height="36" fetchpriority="high" decoding="async"/></div>
     vnstock.io.vn
   </a>
   <div class="nav-links">
@@ -270,6 +354,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <a href="#features" class="btn-hero btn-hero-ghost">Xem tính năng ↓</a>
   </div>
   <p class="hero-note"><span>✓</span> Không cần cài đặt &nbsp;·&nbsp; <span>✓</span> Chạy trên mọi thiết bị &nbsp;·&nbsp; <span>✓</span> Dữ liệu SSI FastConnect chính hãng</p>
+</section>
+
+<!-- Featured-on bar — social proof -->
+<section style="max-width:1100px;margin:32px auto 0;padding:24px;text-align:center">
+  <div style="font-size:11px;color:#4a6180;letter-spacing:2px;margin-bottom:14px;font-weight:700">FEATURED ON · PUBLISHED ON</div>
+  <div style="display:flex;justify-content:center;align-items:center;gap:28px;flex-wrap:wrap;opacity:.75">
+    <a href="https://dev.to/bi_v_96462ad8e6224d8609" target="_blank" rel="noopener" style="color:#9fb3d0;font-size:18px;font-weight:800;text-decoration:none">DEV.to</a>
+    <span style="color:#1e2d47">·</span>
+    <a href="/rss.xml" style="color:#9fb3d0;font-size:14px;text-decoration:none">📡 RSS Feed</a>
+    <span style="color:#1e2d47">·</span>
+    <a href="/sitemap-index.xml" style="color:#9fb3d0;font-size:14px;text-decoration:none">🗺️ Sitemap (860+ URLs)</a>
+    <span style="color:#1e2d47">·</span>
+    <a href="https://t.me/vnstockio" target="_blank" rel="noopener" style="color:#9fb3d0;font-size:14px;text-decoration:none">📱 Telegram Channel</a>
+  </div>
+</section>
+
+<!-- Stats — social proof số liệu -->
+<section style="max-width:1100px;margin:32px auto 0;padding:32px 24px;background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(168,85,247,.05));border:1px solid rgba(37,99,235,.15);border-radius:16px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;text-align:center">
+    <div>
+      <div style="font-size:32px;font-weight:900;color:#5b9dff" id="statStocks">1,500+</div>
+      <div style="font-size:13px;color:#9fb3d0;margin-top:4px">Mã VN realtime</div>
+    </div>
+    <div>
+      <div style="font-size:32px;font-weight:900;color:#a855f7">25</div>
+      <div style="font-size:13px;color:#9fb3d0;margin-top:4px">Chỉ báo kỹ thuật</div>
+    </div>
+    <div>
+      <div style="font-size:32px;font-weight:900;color:#00e676">860+</div>
+      <div style="font-size:13px;color:#9fb3d0;margin-top:4px">SEO pages indexed</div>
+    </div>
+    <div>
+      <div style="font-size:32px;font-weight:900;color:#fbbf24">100%</div>
+      <div style="font-size:13px;color:#9fb3d0;margin-top:4px">Free forever</div>
+    </div>
+  </div>
 </section>
 
 <!-- DEMO MOCKUP -->
@@ -527,7 +647,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <footer>
   <div class="footer-grid">
     <div>
-      <div class="footer-brand"><div class="footer-brand-ico"><img src="/icons/pwa-icon-192.png" alt="vnstock.io.vn"/></div>vnstock.io.vn</div>
+      <div class="footer-brand"><div class="footer-brand-ico"><img src="/icons/pwa-icon-192.png" alt="vnstock.io.vn" width="32" height="32" loading="lazy" decoding="async"/></div>vnstock.io.vn</div>
       <div class="footer-desc">Nền tảng phân tích kỹ thuật chứng khoán Việt Nam chuyên nghiệp. Bảng giá realtime, tín hiệu AI, screener, backtest và quản lý danh mục đầu tư.</div>
       <div style="font-size:11px;color:var(--sub)">📧 vubui365@gmail.com</div>
     </div>
@@ -791,5 +911,74 @@ if(sb){const so=new IntersectionObserver(entries=>{if(entries[0].isIntersecting)
   });
 })();
 </script>
+
+<!-- ═══ EXIT-INTENT POPUP — capture leaving users ═══ -->
+<div id="exitIntent" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)">
+  <div style="background:#0e1320;border:1px solid #2563eb;border-radius:16px;max-width:480px;width:100%;padding:32px;text-align:center;position:relative;box-shadow:0 24px 80px rgba(0,0,0,.6)">
+    <button onclick="document.getElementById('exitIntent').style.display='none';sessionStorage.setItem('exit_dismissed','1')" style="position:absolute;top:12px;right:12px;background:transparent;border:0;color:#9fb3d0;font-size:22px;cursor:pointer;width:32px;height:32px">✕</button>
+    <div style="font-size:48px;margin-bottom:8px">📊</div>
+    <h2 style="font-size:24px;color:#e2edff;font-weight:900;margin:0 0 8px">Khoan đã!</h2>
+    <p style="color:#9fb3d0;font-size:15px;line-height:1.6;margin:0 0 20px">Nhận <strong style="color:#fbbf24">Top 5 mã breakout mỗi sáng</strong> + AI signals miễn phí. Đăng ký 5 giây, unsubscribe 1 click.</p>
+    <form id="exitForm" action="/api/admin/email-subscribe" method="post" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <input type="email" name="email" required placeholder="your@email.com" style="flex:1;min-width:200px;padding:14px 16px;border:1px solid #334155;border-radius:8px;background:#0a0d14;color:#e2edff;font-size:15px">
+      <button type="submit" style="padding:14px 24px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:0;border-radius:8px;font-weight:800;cursor:pointer;font-size:15px">Đăng ký miễn phí</button>
+    </form>
+    <div style="font-size:12px;color:#4a6180">🔒 Không spam · <a href="/privacy" style="color:#5b9dff">Privacy</a> · Có thể unsubscribe bất kỳ lúc nào</div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #1e2d47;font-size:13px;color:#9fb3d0">
+      Thích Telegram? <a href="https://t.me/vnstockio" target="_blank" style="color:#5b9dff;font-weight:700">📱 Join channel →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Exit-intent: mouse leave viewport top → show popup. Once per session. */
+(function(){
+  var TRIGGER_KEY = 'exit_dismissed';
+  if (sessionStorage.getItem(TRIGGER_KEY)) return;
+  var triggered = false;
+  function show(){
+    if (triggered) return;
+    triggered = true;
+    var el = document.getElementById('exitIntent');
+    if (el) el.style.display = 'flex';
+  }
+  // Desktop: mouse leaves top
+  document.addEventListener('mouseleave', function(e){
+    if (e.clientY <= 0 && !triggered) show();
+  });
+  // Mobile: scroll-up rapidly (intent to leave) or 60s timer fallback
+  var lastY = window.scrollY, scrollUpStart = null;
+  document.addEventListener('scroll', function(){
+    var y = window.scrollY;
+    if (y < lastY) {
+      if (!scrollUpStart) scrollUpStart = Date.now();
+      if (Date.now() - scrollUpStart > 800 && y < 100) show();
+    } else { scrollUpStart = null; }
+    lastY = y;
+  }, {passive: true});
+  // Time-based fallback (90 seconds)
+  setTimeout(function(){ if (!triggered && document.visibilityState === 'visible') show(); }, 90000);
+  // AJAX submit (no page reload)
+  document.addEventListener('DOMContentLoaded', function(){
+    var form = document.getElementById('exitForm');
+    if (form) form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var email = form.querySelector('input[name=email]').value;
+      fetch('/api/admin/email-subscribe?email=' + encodeURIComponent(email), {method: 'POST'})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (d.ok) {
+            form.innerHTML = '<div style="padding:14px 18px;background:#0a3a18;color:#00e676;border-radius:8px;font-weight:700;text-align:center;width:100%">✅ Đã đăng ký! Kiểm tra inbox để xác nhận.</div>';
+            sessionStorage.setItem(TRIGGER_KEY, '1');
+            setTimeout(function(){ document.getElementById('exitIntent').style.display='none'; }, 2500);
+          } else {
+            alert('Lỗi: ' + (d.error || 'Không rõ. Thử lại.'));
+          }
+        }).catch(function(err){ alert('Lỗi mạng: ' + err); });
+    });
+  });
+})();
+</script>
+
 </body>
 </html>
