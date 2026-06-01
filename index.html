@@ -1369,6 +1369,53 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
       box-sizing: content-box
     }
 
+    /* Nút zoom biểu đồ (kiểu Investing) */
+    .czctl {
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      z-index: 7;
+      display: flex;
+      flex-direction: column;
+      gap: 4px
+    }
+
+    .czbtn {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card2);
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: .8;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+      transition: opacity .15s, border-color .15s
+    }
+
+    .czbtn:hover {
+      opacity: 1;
+      border-color: var(--green)
+    }
+
+    /* Biểu đồ nến mở rộng toàn màn hình */
+    .lwc-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99999 !important;
+      background: var(--card2, #0d1117) !important;
+      padding: 6px !important;
+      box-sizing: border-box
+    }
+
     /* OHLCV */
     .ostrip {
       display: grid;
@@ -3959,12 +4006,13 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
       overflow-y: auto;
       overflow-x: hidden;
       padding: 6px;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
+      scrollbar-width: none;        /* ẩn thanh trượt (Firefox) */
+      -ms-overflow-style: none;     /* ẩn thanh trượt (IE/Edge cũ) */
     }
 
     #dashNewsBox .dnb-body::-webkit-scrollbar {
-      width: 5px
+      width: 0;
+      height: 0;
     }
 
     #dashNewsBox .dnb-body::-webkit-scrollbar-thumb {
@@ -6352,7 +6400,7 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
     <button class="tab" onclick="goTab('portfolio')">💼 Portfolio</button>
     <button class="tab" onclick="goTab('sector')">🏭 Ngành</button>
     <button class="tab tab-hide-md" onclick="goTab('mheatmap')">🗺 Heatmap</button>
-    <button class="tab tab-hide-md tab-hide-sm" onclick="goTab('guide')">📖 Hướng dẫn</button>
+    <button class="tab tab-hide-md tab-hide-sm" onclick="goTab('guide')" style="display:none">📖 Hướng dẫn</button>
     <button class="tab" onclick="goTab('ml')">🤖 ML</button>
     <button class="tab" onclick="goTab('aichat')">💬 AI Analyst</button>
     <button class="tab tab-hide-md" onclick="goTab('calendar')">📅 Lịch</button>
@@ -6373,7 +6421,7 @@ RSI MACD, AI dự báo cổ phiếu, phân tích kỹ thuật VN">
       <div id="tabs-more-drop" style="display:none;position:absolute;top:100%;left:0;z-index:500;
       background:var(--surf);border:1px solid var(--border);border-radius:10px;
       padding:6px;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.4);flex-direction:column;gap:2px">
-        <button class="tab" onclick="goTab('guide');closeTabsMore()"
+        <button class="tab" onclick="goTab('guide');closeTabsMore()" style="display:none"
           style="text-align:left;padding:8px 12px;border-radius:7px;width:100%">📖 Hướng dẫn</button>
         <button class="tab" onclick="goTab('rs');closeTabsMore()"
           style="text-align:left;padding:8px 12px;border-radius:7px;width:100%">📊 RS</button>
@@ -7195,6 +7243,9 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
           <input id="scr-min" type="number" value="6" min="1" max="25"
             style="width:62px;padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--surf);color:var(--text);font-size:11px"
             title="Min score (1-25)">
+          <button onclick="document.getElementById('scr-sig').value='BUY';document.getElementById('scr-min').value=10;var _c=document.getElementById('scr-criteria');if(_c)_c.value='high_conf';runScreener()"
+            title="Lọc nhanh: BUY + Score≥10 + Confidence cao — loại bẫy fake breakout"
+            style="padding:5px 12px;border-radius:7px;background:linear-gradient(135deg,#00b85c,#00e676);color:#04210f;border:none;font-size:11px;font-weight:800;cursor:pointer">🔥 Mua mạnh</button>
           <button onclick="runScreener()"
             style="padding:5px 14px;border-radius:7px;background:var(--accent);color:#fff;border:none;font-size:11px;font-weight:700;cursor:pointer">🔍
             Scan</button>
@@ -8439,7 +8490,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       <div class="warnbox">
         <div style="font-weight:800;font-size:11px;color:var(--orange);margin-bottom:4px">⚠️ Rate Limit VN</div>
         <div style="font-size:10px;color:var(--sub);line-height:1.8">
-          vnstock miễn phí ~20 req/phút. Vnstock.io.vn dùng queue <b>3.5s/mã · 1 worker</b>, cache VN <b>30 phút</b>, US
+          vnstock miễn phí ~20 req/phút. Vnstock.io.vn dùng queue <b>1.2s/mã · 2 workers</b>, cache VN <b>30 phút</b>, US
           <b>10 phút</b>. Thêm từng mã và chờ "✅ Đã thêm" trước khi thêm tiếp.
         </div>
       </div>
@@ -9963,6 +10014,26 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       return null
     }
 
+    // 💎 Modal Nâng cấp Premium — hiện khi API trả upgrade payload (commercial ON + free vượt giới hạn)
+    function showUpgradeModal(data) {
+      data = data || {}
+      var msg = (data.error || 'Tính năng này thuộc gói Premium.').replace(/</g, '&lt;').replace(/\n/g, '<br>')
+      var url = data.upgrade_url || '/upgrade?plan=pro_monthly'
+      var ex = document.getElementById('vnsUpgradeModal'); if (ex) ex.remove()
+      var d = document.createElement('div')
+      d.id = 'vnsUpgradeModal'
+      d.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)'
+      d.innerHTML = '<div style="background:#0e1320;border:1px solid #2563eb;border-radius:16px;max-width:420px;width:100%;padding:28px;text-align:center;box-shadow:0 12px 48px rgba(0,0,0,.55)">'
+        + '<div style="font-size:42px;margin-bottom:6px">💎</div>'
+        + '<h3 style="color:#e2edff;font-size:20px;font-weight:800;margin:0 0 10px">Nâng cấp Premium</h3>'
+        + '<p style="color:#9fb3d0;font-size:14px;line-height:1.65;margin:0 0 20px">' + msg + '</p>'
+        + '<a href="' + url + '" style="display:block;padding:13px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0e1a;border-radius:10px;font-weight:800;text-decoration:none;font-size:15px;margin-bottom:10px">💎 Nâng cấp ngay — 299k/tháng</a>'
+        + '<button type="button" onclick="this.closest(\'#vnsUpgradeModal\').remove()" style="background:none;border:0;color:#9fb3d0;font-size:13px;cursor:pointer;padding:6px">Để sau</button>'
+        + '</div>'
+      d.addEventListener('click', function (e) { if (e.target === d) d.remove() })
+      document.body.appendChild(d)
+    }
+
     async function api(m, p, b) {
       try {
         const ctrl = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(15000) : null
@@ -9974,7 +10045,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         if (!r.ok && r.status !== 400 && r.status !== 403 && r.status !== 404) { console.warn('[api]', m, p, r.status); return null }
         const txt = await r.text()
         if (!txt) return null
-        try { return JSON.parse(txt) } catch (e) { return null }
+        try { const _o = JSON.parse(txt); if (_o && _o.upgrade && typeof showUpgradeModal === 'function') showUpgradeModal(_o); return _o } catch (e) { return null }
       } catch (e) {
         if (e.name !== 'AbortError') {
           console.warn('[api] error:', m, p, e.message)
@@ -10450,6 +10521,25 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
               if (msg.type === 'price_update' && msg.symbol) {
                 _updateRow(msg.symbol, msg.price, msg.chg, msg.vol);
               }
+              // ── Server-Push: cập nhật market board khi cache server được refresh ──
+              if (msg.type === 'market_board_update' && msg.symbol) {
+                const sym = msg.symbol;
+                // 1. Cập nhật sd[] (watchlist cache) để row watchlist khỏi hiện STALE
+                if (window.sd && window.sd[sym] && msg.price) {
+                  Object.assign(window.sd[sym], {
+                    price: msg.price, chg: msg.chg || 0, vol: msg.vol || 0,
+                    high: msg.high || 0, low: msg.low || 0, open: msg.open || 0,
+                  });
+                  if (!window.sd[sym].analysis) window.sd[sym].analysis = {};
+                  window.sd[sym].analysis.signal = msg.signal || '';
+                  window.sd[sym].analysis.total  = msg.score  || 0;
+                  window.sd[sym].analysis.rsi    = msg.rsi    || 50;
+                }
+                // 2. Cập nhật _fbData qua global callback (fboard IIFE có scope riêng)
+                if (typeof window._onFBoardUpdate === 'function') window._onFBoardUpdate(msg);
+                // 3. Cập nhật market scanner sidebar
+                if (typeof window._mktUpdateRow === 'function') window._mktUpdateRow(sym, msg.price, msg.chg);
+              }
             } catch(err) { /* ignore parse errors */ }
           };
           _ws.onclose = function() {
@@ -10473,6 +10563,68 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         setTimeout(_connect, 1500);
       }
     })();
+
+    // ── Aha-moment: widget tín hiệu BUY hôm nay (không cần login) ──
+    let _ahaMomentLoaded = false
+    async function _renderAhaMoment() {
+      const body = document.getElementById('tbody')
+      if (!body || _ahaMomentLoaded) return
+      _ahaMomentLoaded = true
+      // Header
+      const wrap = document.createElement('div')
+      wrap.id = 'aha-widget'
+      wrap.style.cssText = 'padding:18px 16px 8px;'
+      wrap.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:13px;font-weight:800;color:var(--green);letter-spacing:.3px">⚡ TÍN HIỆU MUA MẠNH NHẤT HÔM NAY</div>
+            <div style="font-size:10px;color:var(--sub);margin-top:2px">Quét 25 chỉ báo kỹ thuật — cập nhật realtime</div>
+          </div>
+          <a href="/upgrade?plan=monthly" style="padding:7px 16px;background:linear-gradient(90deg,#2563eb,#7c3aed);color:#fff;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">⭐ Mở khóa đầy đủ</a>
+        </div>
+        <div id="aha-list" style="display:flex;flex-direction:column;gap:6px">
+          <div style="color:var(--sub);font-size:11px;padding:12px;text-align:center">⏳ Đang tải tín hiệu...</div>
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.2);border-radius:8px;font-size:11px;color:var(--sub);text-align:center">
+          🔒 Đăng ký miễn phí để thêm mã vào watchlist và nhận cảnh báo tín hiệu realtime
+          <div style="margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button onclick="showLogin()" style="padding:7px 18px;background:var(--accent);color:#fff;border:0;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Đăng ký miễn phí</button>
+            <button onclick="showLogin()" style="padding:7px 18px;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">Đăng nhập</button>
+          </div>
+        </div>`
+      body.appendChild(wrap)
+      // Fetch top BUY signals
+      try {
+        const r = await fetch('/api/screener?market=VN&signal=BUY&min_score=8&limit=5')
+        const d = r.ok ? await r.json() : null
+        const list = document.getElementById('aha-list')
+        if (!list) return
+        const stocks = d?.stocks || d?.results || []
+        if (!stocks.length) { list.innerHTML = '<div style="color:var(--sub);font-size:11px;padding:12px;text-align:center">Chưa có tín hiệu mạnh hôm nay</div>'; return }
+        const sigColor = { BUY:'var(--green)', STRONG_BUY:'#00e676', BUY_WARN:'#fbbf24', NEUTRAL:'var(--sub)' }
+        const sigLabel = { BUY:'🟢 MUA', STRONG_BUY:'🚀 MUA MẠNH', BUY_WARN:'⚠️ MUA YẾU', NEUTRAL:'⬜ TRUNG TÍNH' }
+        list.innerHTML = stocks.map(s => {
+          const chg = (s.chg || 0)
+          const chgTxt = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'
+          const chgCol = chg > 0 ? 'var(--green)' : chg < 0 ? 'var(--red)' : 'var(--sub)'
+          const sig = (s.signal || 'NEUTRAL').toUpperCase()
+          const score = s.score || s.total || 0
+          const scoreBar = Math.min(100, Math.max(0, (score + 13) / 26 * 100))
+          return `<div onclick="openMdl && openMdl('${s.symbol}')" style="display:grid;grid-template-columns:56px 1fr auto auto;align-items:center;gap:8px;padding:8px 10px;background:var(--card2);border-radius:8px;cursor:pointer;transition:background .1s" onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background='var(--card2)'">
+            <div style="font-weight:800;font-family:var(--mono);font-size:13px">${s.symbol}</div>
+            <div>
+              <div style="font-size:10px;color:${sigColor[sig]||'var(--green)'};font-weight:700">${sigLabel[sig]||sig}</div>
+              <div style="height:3px;background:var(--border);border-radius:2px;margin-top:3px;width:80px"><div style="height:3px;width:${scoreBar}%;background:${sigColor[sig]||'var(--green)'};border-radius:2px"></div></div>
+            </div>
+            <div style="font-size:11px;font-weight:700;color:${chgCol}">${chgTxt}</div>
+            <div style="font-size:10px;color:var(--sub);font-family:var(--mono)">${score > 0 ? '+' : ''}${score}</div>
+          </div>`
+        }).join('')
+      } catch(e) {
+        const list = document.getElementById('aha-list')
+        if (list) list.innerHTML = '<div style="color:var(--sub);font-size:11px;padding:12px;text-align:center">Không tải được tín hiệu</div>'
+      }
+    }
 
     async function init() {
       // Thử auth — nếu đã login thì load user data, nếu chưa thì vẫn cho xem free
@@ -10577,7 +10729,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       setInterval(async () => {
         const s2 = await api('GET', '/api/status').catch(() => ({ vn_queue: 0 }))
         const el = document.getElementById('vnsbar')
-        if (s2?.vn_queue > 0) { el.style.display = 'block'; document.getElementById('vns-txt').textContent = `VN Queue: ${s2.vn_queue} mã đang chờ fetch (3.5s/mã)` }
+        if (s2?.vn_queue > 0) { el.style.display = 'block'; document.getElementById('vns-txt').textContent = `VN Queue: ${s2.vn_queue} mã mã đang chờ — ~1.2s/mã` }
         else el.style.display = 'none'
       }, 3000)
       // Close search dropdown on outside click
@@ -10699,26 +10851,48 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
     // ── REFRESH ──
     async function refreshAll(silent = false) {
       if (!wl.length) return
+      // Ẩn aha-widget nếu user đã có mã
+      const _ahaW = document.getElementById('aha-widget')
+      if (_ahaW) { _ahaW.remove(); _ahaMomentLoaded = false }
       const l = document.getElementById('ll'), dl = document.getElementById('dl')
       if (l) { l.textContent = 'UPDATING'; l.style.color = 'var(--orange)' }
       if (dl) dl.style.background = 'var(--orange)'
-      const BATCH = 3
-      for (let i = 0; i < wl.length; i += BATCH) {
-        const slice = wl.slice(i, i + BATCH)
-        await Promise.all(slice.map(async w => {
+
+      // ── Bulk fetch: 1 request thay vì 316 request riêng lẻ ──────────
+      const VN_SYMS = wl.filter(w => w.market === 'VN').map(w => w.symbol)
+      const US_SYMS = wl.filter(w => w.market !== 'VN').map(w => w.symbol)
+      const CHUNK = 100  // Max per request (server cap 200)
+
+      async function _bulkFetch(syms, market) {
+        if (!syms.length) return
+        for (let i = 0; i < syms.length; i += CHUNK) {
+          const chunk = syms.slice(i, i + CHUNK)
           try {
-            const d = await api('GET', `/api/stock/${w.symbol}?market=${w.market}`); if (d && d.price) {
-              sd[w.symbol] = d;// Preserve tag/thesis from watchlist item into sd so openTagModal can find them
-              if (w.tag) sd[w.symbol].tag = w.tag; if (w.thesis) sd[w.symbol].thesis = w.thesis; chkAlert(w.symbol, false)
+            const res = await api('GET', `/api/stocks/bulk?syms=${chunk.join(',')}&market=${market}`)
+            if (res && typeof res === 'object') {
+              for (const [sym, d] of Object.entries(res)) {
+                if (d && d.price) {
+                  sd[sym] = d
+                  const wItem = wl.find(w => w.symbol === sym)
+                  if (wItem?.tag) sd[sym].tag = wItem.tag
+                  if (wItem?.thesis) sd[sym].thesis = wItem.thesis
+                  chkAlert(sym, false)
+                }
+              }
             }
-          } catch (e) { }
-        }))
-        // Batch đầu: force rebuild (page 1 hiện data ngay, không chờ hết watchlist)
-        // Batch sau: patch-only để tránh flicker
-        if (i === 0) { _tableNeedsRebuild = true; renderTable(false) }
-        else if (i + BATCH < wl.length) { renderTable(true) }
+          } catch(e) {}
+          // Render sau mỗi chunk để user thấy data ngay
+          _tableNeedsRebuild = true; renderTable(false)
+        }
       }
-      renderTable(true); updateStats(); updateTicker()  // true=patch only, không rebuild
+
+      // VN và US fetch song song
+      await Promise.all([
+        _bulkFetch(VN_SYMS, 'VN'),
+        _bulkFetch(US_SYMS, 'US'),
+      ])
+
+      renderTable(true); updateStats(); updateTicker()
       if (l) { l.textContent = 'LIVE'; l.style.color = 'var(--green)' }
       if (dl) dl.style.background = 'var(--green)'
       cd = 30
@@ -10850,6 +11024,12 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         if (filterText || filterSig !== 'ALL') emptyMsg = 'Không tìm thấy mã phù hợp. Thử xóa bộ lọc.'
         if (filterTag !== 'ALL' && filterTag !== 'notag') emptyMsg = `Chưa có mã nào được gắn tag "${filterTag.toUpperCase()}". Nhấn 🏷 trên mỗi mã để gắn tag.`
         if (filterTag === 'notag') emptyMsg = 'Tất cả mã đã được gắn tag.'
+        // ── Aha-moment widget: hiện top tín hiệu hôm nay khi watchlist trống ──
+        if (!wl.length && !filterText && filterSig === 'ALL' && filterTag === 'ALL') {
+          body.innerHTML = '<div class="empty"><div class="eico">🔍</div><div class="etxt">' + emptyMsg + '</div></div>'
+          _renderAhaMoment()
+          return
+        }
         body.innerHTML = '<div class="empty"><div class="eico">🔍</div><div class="etxt">' + emptyMsg + '</div></div>'
         return
       }
@@ -10860,7 +11040,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         if (!s) return `<div class="trow tcols rin" data-sym="${w.symbol}" style="animation-delay:${i * 15}ms">
       <div><span style="font-weight:800;font-family:var(--mono);font-size:12px">${w.symbol}</span>
       <span class="mbb ${vn ? 'mb-vn' : 'mb-us'}" style="margin-left:4px">${vn ? '🇻🇳' : '🇺🇸'}</span></div>
-      <div style="color:var(--sub);font-size:10px;grid-column:2/10">${vn ? '⏳ Queue VN (3.5s/mã)...' : '⏳ Đang tải...'}</div></div>`
+      <div style="color:var(--sub);font-size:10px;grid-column:2/10">${vn ? '⏳ Đang tải dữ liệu...' : '⏳ Đang tải...'}</div></div>`
         const chg = s.chg, sig = a?.signal || 'NEUTRAL', col = a?.signal_color || '#334d66', tot = a?.total ?? 0
         const trend = a?.trend_long || 'NA'
         // MTF consensus badge
@@ -11387,7 +11567,8 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
           const l = parseFloat(d.l) > 0 ? parseFloat(d.l) : c
           const safeH = Math.max(h, o, c), safeL = Math.min(l, o, c)
           if (!isFinite(safeH) || !isFinite(safeL) || safeH < safeL) continue
-          candles.push({ time: t, open: o, high: safeH, low: safeL, close: c })
+          const vol = parseFloat(d.v ?? d.vol ?? d.volume) || 0
+          candles.push({ time: t, open: o, high: safeH, low: safeL, close: c, volume: vol })
         }
         candles.sort((a, b) => a.time > b.time ? 1 : -1)
         if (candles.length === 0) {
@@ -11437,6 +11618,16 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
             window._lwcCandles = candles
             // Re-apply active indicators
             _applyActiveIndicators(chart, candles, a)
+            // ── Nút phóng to / thu nhỏ biểu đồ (kiểu Investing) ──
+            el.style.position = 'relative'
+            const _zc = document.createElement('div')
+            _zc.className = 'czctl'
+            _zc.innerHTML =
+              '<button type="button" class="czbtn" title="Phóng to" onclick="chartZoom(0.7)">+</button>'
+              + '<button type="button" class="czbtn" title="Thu nhỏ" onclick="chartZoom(1.45)">−</button>'
+              + '<button type="button" class="czbtn" title="Xem toàn bộ" onclick="chartZoomReset()">⤢</button>'
+              + '<button type="button" class="czbtn" id="czFullBtn" title="Mở rộng toàn màn hình" onclick="chartToggleFullscreen()">⛶</button>'
+            el.appendChild(_zc)
             mdlChart = {
               remove: () => {
                 clearTimeout(_roTimer)
@@ -12073,7 +12264,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       })).sort((a,b)=>a.time>b.time?1:-1)*/
       const raw = _chartData.history || _chartData.chart_data || []
       const _dRxLC = /^\d{4}-\d{2}-\d{2}$/, _seenLC = new Set()
-      const candles = raw.filter(x => x.c > 0).map(x => {
+      let dailyCandles = raw.filter(x => x.c > 0).map(x => {
         const t = normalizeDate(x.t || x.d || x.date || x.trade_date)
         if (!t || !_dRxLC.test(t)) return null
         const c = parseFloat(x.c), o = parseFloat(x.o) || c, h = parseFloat(x.h) || c, l = parseFloat(x.l) || c
@@ -12083,7 +12274,33 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         if (safeH < safeL || !isFinite(safeH) || !isFinite(safeL)) return null
         return { time: t, open: o, high: safeH, low: safeL, close: c, volume: v }
       }).filter(x => x && !_seenLC.has(x.time) && _seenLC.add(x.time))
-      candles.sort((a, b) => a.time > b.time ? 1 : -1)
+      dailyCandles.sort((a, b) => a.time > b.time ? 1 : -1)
+
+      // ── Aggregate 1D → 1W hoặc 1M theo chartTF ──────────────────
+      function _aggregateCandles(bars, mode) {
+        const groups = {}
+        bars.forEach(b => {
+          const d = new Date(b.time)
+          let key
+          if (mode === '1W') {
+            // ISO week: Monday của tuần đó
+            const day = d.getDay() || 7
+            const mon = new Date(d); mon.setDate(d.getDate() - day + 1)
+            key = mon.toISOString().slice(0, 10)
+          } else {
+            key = b.time.slice(0, 7) + '-01'  // YYYY-MM-01
+          }
+          if (!groups[key]) groups[key] = { time: key, open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume }
+          else {
+            groups[key].high   = Math.max(groups[key].high, b.high)
+            groups[key].low    = Math.min(groups[key].low,  b.low)
+            groups[key].close  = b.close
+            groups[key].volume += b.volume
+          }
+        })
+        return Object.values(groups).sort((a, b) => a.time > b.time ? 1 : -1)
+      }
+      const candles = (tf === '1W' || tf === '1M') ? _aggregateCandles(dailyCandles, tf) : dailyCandles
 
       const el = document.getElementById('chartContainer')
       if (_chartInst) { try { _chartInst.remove() } catch (e) { } _chartInst = null }
@@ -12694,17 +12911,21 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       const el = document.getElementById('foreignFlowPanel'); if (!el) return
       el.innerHTML = '<span style="color:var(--sub)">⏳ Đang tải dữ liệu khối ngoại...</span>'
       const data = await api('GET', '/api/foreign_flow').catch(() => null)
-      if (!data || !Object.keys(data).length) {
-        el.innerHTML = '<span style="color:var(--sub)">Không có dữ liệu (cần vnstock + VN watchlist)</span>'
+      // Chỉ giữ entry hợp lệ (object có số liệu) — tránh render {error:...} thành "error undefined / NaNK cp"
+      const items = (data && typeof data === 'object' && !data.error)
+        ? Object.entries(data).filter(([, d]) => d && typeof d === 'object' && Number.isFinite(+d.net_vol))
+        : []
+      if (!items.length) {
+        el.innerHTML = '<span style="color:var(--sub)">Không có dữ liệu (cần vnstock + watchlist VN)</span>'
         return
       }
-      const items = Object.entries(data)
+      const fmtK = v => Number.isFinite(+v) ? (+v / 1000).toFixed(0) + 'K cp' : '—'
       el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
-    ${items.map(([sym, d]) => `<div style="background:var(--card2);border-radius:8px;padding:8px;border-left:3px solid ${d.color}">
+    ${items.map(([sym, d]) => `<div style="background:var(--card2);border-radius:8px;padding:8px;border-left:3px solid ${d.color || 'var(--border)'}">
       <div style="font-size:11px;font-weight:800;font-family:var(--mono)">${sym}</div>
-      <div style="font-size:10px;color:${d.color};font-weight:700">${d.signal}</div>
-      <div style="font-size:9px;color:var(--sub)">Net: ${(d.net_vol / 1000).toFixed(0)}K cp</div>
-      <div style="font-size:9px;color:var(--sub)">5D: ${(d.net_5d / 1000).toFixed(0)}K cp</div>
+      <div style="font-size:10px;color:${d.color || 'var(--sub)'};font-weight:700">${d.signal || '—'}</div>
+      <div style="font-size:9px;color:var(--sub)">Net: ${fmtK(d.net_vol)}</div>
+      <div style="font-size:9px;color:var(--sub)">5D: ${fmtK(d.net_5d)}</div>
     </div>`).join('')}
   </div>`
     }
@@ -13455,7 +13676,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
 
       // Plan distribution + recent payments
       if (planEl && r.plan_dist && Object.keys(r.plan_dist).length) {
-        const planMap = { free: 'Miễn phí', monthly: 'Pro 1T', quarter: 'Pro 3T', halfyear: 'Pro 6T', yearly: 'Pro 1Y' }
+        const planMap = { free: 'Miễn phí', trial: '⭐ Dùng thử', monthly: 'Pro 1T', quarter: 'Pro 3T', halfyear: 'Pro 6T', yearly: 'Pro 1Y' }
         planEl.style.display = 'grid'
         planEl.style.gridTemplateColumns = '1fr 1fr'
         planEl.style.gap = '8px'
@@ -14706,14 +14927,17 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
 
     function showMdlTab(tab) {
       const tabs = {
-        news: ['tabNewsBtn', 'mdlNewsPane'],
-        events: ['tabEventsBtn', 'mdlEventsPane'],
-        fin: ['tabFinBtn', 'mdlFinPane'],
-        intraday: ['tabIntradayBtn', 'mdlIntradayPane'],
-        pattern: ['tabPatternBtn', 'mdlPatternPane'],
-        bctc: ['tabBctcBtn', 'mdlBctcPane'],
-        mtf: ['tabMtfBtn', 'mdlMtfPane'],
-        quant: ['tabQuantBtn', 'mdlQuantPane'],
+        news:     ['tabNewsBtn',    'mdlNewsPane'],
+        events:   ['tabEventsBtn',  'mdlEventsPane'],
+        fin:      ['tabFinBtn',     'mdlFinPane'],
+        fund:     ['tabFundBtn',    'mdlFundPane'],
+        ob:       ['tabObBtn',      'mdlObPane'],
+        ai:       ['tabAiBtn',      'mdlAiPane'],
+        intraday: ['tabIntradayBtn','mdlIntradayPane'],
+        pattern:  ['tabPatternBtn', 'mdlPatternPane'],
+        bctc:     ['tabBctcBtn',    'mdlBctcPane'],
+        mtf:      ['tabMtfBtn',     'mdlMtfPane'],
+        quant:    ['tabQuantBtn',   'mdlQuantPane'],
       }
       // Set loading state IMMEDIATELY (trước khi await api) để user thấy phản hồi
       if (tab === 'mtf' && mdlSym) {
@@ -14724,6 +14948,16 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         const qPane = document.getElementById('mdlQuantPane')
         if (qPane) qPane.innerHTML = '<div style="text-align:center;padding:24px;color:#a78bfa;font-size:13px;font-weight:700">⏳ Đang chạy GARCH + VaR + Monte Carlo (1000 paths)...</div>'
       }
+      if (tab === 'ai' && mdlSym) setTimeout(() => {
+        const aiPane = document.getElementById('mdlAiPane')
+        if (aiPane && (!aiPane.innerHTML.trim() || aiPane.innerHTML.includes('Nhấn'))) {
+          if (typeof loadAIAnalysis === 'function') loadAIAnalysis(mdlSym, sd[mdlSym]?.market || 'VN')
+          else if (typeof loadContinuousAnalyst === 'function') loadContinuousAnalyst(mdlSym)
+        }
+      }, 80)
+      if (tab === 'fund' && mdlSym) setTimeout(() => {
+        if (typeof loadSectorPE === 'function') loadSectorPE(mdlSym)
+      }, 80)
       if (tab === 'intraday' && mdlSym) setTimeout(() => loadIntradayPane(mdlSym, sd[mdlSym]?.market || 'VN'), 50)
       if (tab === 'bctc' && mdlSym) setTimeout(() => loadBCTC(mdlSym), 80)
       if (tab === 'pattern' && mdlSym) setTimeout(() => loadPatternPane(mdlSym), 50)
@@ -15120,6 +15354,22 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
           ...getCandleSeriesOpts()
         })
         cs.setData(candles)
+
+        // ── Volume histogram trong intraday ──
+        const idVolData = candles.filter(c => (c.volume || 0) > 0).map(c => ({
+          time: c.time, value: c.volume,
+          color: c.close >= c.open ? 'rgba(0,200,100,0.4)' : 'rgba(240,60,80,0.4)'
+        }))
+        if (idVolData.length > 0) {
+          const idVolSeries = chart.addHistogramSeries({
+            priceFormat: { type: 'volume' },
+            priceScaleId: 'idvol',
+            scaleMargins: { top: 0.85, bottom: 0 },
+          })
+          idVolSeries.setData(idVolData)
+          chart.priceScale('idvol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
+        }
+
         chart.timeScale().fitContent()
 
         let _roTimer2 = null
@@ -20224,6 +20474,10 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         </div>
       </div>
 
+      <!-- Toggle chi tiết: mặc định thu gọn, chỉ hiện scenario + % tin cậy ở trên -->
+      <button id="trendToggleBtn" onclick="var _b=document.getElementById('trendDetailBox');var _sh=_b.style.display==='none';_b.style.display=_sh?'block':'none';this.innerHTML=_sh?'▲ Thu gọn':'▼ Xem chi tiết (mục tiêu giá · Fibonacci · dự báo 15 phiên · swarm...)'" style="width:100%;padding:9px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">▼ Xem chi tiết (mục tiêu giá · Fibonacci · dự báo 15 phiên · swarm...)</button>
+      <div id="trendDetailBox" style="display:none">
+
       <!-- Bull/Bear bar -->
       <div style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--sub);margin-bottom:3px">
@@ -20403,6 +20657,7 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         ⚠️ Dự báo dựa trên phân tích kỹ thuật · Không phải tư vấn đầu tư<br>
         Kết hợp: Linear Regression · ATR · Fibonacci · RSI · MACD · MA · Volume
       </div>
+      </div><!-- /trendDetailBox -->
     </div>`
     }
 
@@ -22027,8 +22282,8 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       if (!arts || !arts.length) {
         body.innerHTML = '<div class="dnb-empty">Chưa có tin tức mới</div>'; return
       }
-      // Render top 30 articles
-      body.innerHTML = arts.slice(0, 30).map(a => {
+      // Render top 20 articles (no scrollbar)
+      body.innerHTML = arts.slice(0, 20).map(a => {
         const url = a.url || a.link || '#'
         const title = _newsEsc(a.title || 'Không tiêu đề')
         const src = _newsEsc(a.source || a.publisher || 'RSS')
@@ -24452,6 +24707,47 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       }
     }
 
+    // ── Phóng to / thu nhỏ biểu đồ chi tiết ──────────────────────
+    // factor < 1 = phóng to (ít nến hơn), factor > 1 = thu nhỏ (nhiều nến hơn)
+    function chartZoom(factor) {
+      const ch = window._lwcChart; if (!ch) return
+      const ts = ch.timeScale()
+      const r = ts.getVisibleLogicalRange(); if (!r) return
+      const span = r.to - r.from
+      const center = (r.from + r.to) / 2
+      const newSpan = Math.max(5, span * factor)  // tối thiểu ~5 nến
+      ts.setVisibleLogicalRange({ from: center - newSpan / 2, to: center + newSpan / 2 })
+    }
+
+    function chartZoomReset() {
+      const ch = window._lwcChart; if (!ch) return
+      ch.timeScale().fitContent()
+    }
+
+    // ── Mở rộng / thu gọn biểu đồ ra toàn màn hình ───────────────
+    function chartToggleFullscreen() {
+      const el = document.getElementById('lwcWrap'); if (!el) return
+      const on = el.classList.toggle('lwc-fullscreen')
+      const btn = document.getElementById('czFullBtn')
+      if (btn) { btn.textContent = on ? '✕' : '⛶'; btn.title = on ? 'Thu gọn (Esc)' : 'Mở rộng toàn màn hình' }
+      // Resize biểu đồ cho khớp khung mới (ResizeObserver cũng tự xử lý — gọi thêm cho chắc)
+      setTimeout(() => {
+        try {
+          if (window._lwcChart) {
+            window._lwcChart.applyOptions({ width: el.clientWidth, height: el.clientHeight })
+            window._lwcChart.timeScale().fitContent()
+          }
+        } catch (e) { }
+      }, 60)
+    }
+    // Esc để thoát toàn màn hình
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        const el = document.getElementById('lwcWrap')
+        if (el && el.classList.contains('lwc-fullscreen')) chartToggleFullscreen()
+      }
+    })
+
     // ── Math helpers ──────────────────────────────────────────────
     function _calcMA(closes, period) {
       const out = []
@@ -24824,8 +25120,29 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         _renderSubPanel('obv', times, obvData, IND_CFG.obv, {})
       }
       if (_activeInds.has('vol')) {
-        const vols = candles.map(b => b.volume || 0)
-        _renderSubPanel('vol', times, vols, IND_CFG.vol, { fixedMin: 0 })
+        // Volume kiểu Investing.com: histogram cột xanh/đỏ ngay dưới đáy biểu đồ giá,
+        // zoom/pan đồng bộ với nến (thay vì panel canvas tĩnh).
+        try {
+          const volData = candles
+            .filter(b => (b.volume || 0) > 0)
+            .map(b => ({
+              time: b.time,
+              value: b.volume,
+              color: b.close >= b.open ? 'rgba(38,166,154,0.55)' : 'rgba(239,83,80,0.55)'
+            }))
+          if (volData.length) {
+            const vs = chart.addHistogramSeries({
+              priceFormat: { type: 'volume' },
+              priceScaleId: 'volpane',
+              lastValueVisible: false,
+              priceLineVisible: false,
+            })
+            vs.setData(volData)
+            // Cột volume chiếm ~18% đáy, không đè lên nến
+            chart.priceScale('volpane').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
+            window._indSeries['vol'] = vs
+          }
+        } catch (e) { }
       }
     }
 
@@ -27804,6 +28121,30 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
       const FB_AUTO_MS = 15000;    // 15-second auto refresh while open
       const FB_LIMIT = 200;      // server hard-caps at 200
 
+      // ── Global callback cho WS handler (khác IIFE scope) ─────────
+      // WS handler gọi window._onFBoardUpdate(msg) khi nhận market_board_update
+      window._onFBoardUpdate = function(msg) {
+        const sym = msg.symbol;
+        // Cập nhật _fbData nếu symbol đang có trong bảng
+        const idx = _fbData.findIndex(function(r){ return r.symbol === sym; });
+        if (idx !== -1) {
+          Object.assign(_fbData[idx], {
+            price: msg.price, chg: msg.chg, chg_amt: msg.chg_amt,
+            vol: msg.vol, vol_avg: msg.vol_avg,
+            high: msg.high, low: msg.low, open: msg.open,
+            signal: msg.signal, score: msg.score, rsi: msg.rsi,
+          });
+          // Re-render (throttle bằng rAF)
+          if (_fbOpen && !window._fbPendingRender) {
+            window._fbPendingRender = true;
+            requestAnimationFrame(function() {
+              window._fbPendingRender = false;
+              _renderFBoard();
+            });
+          }
+        }
+      };
+
       // ── Helpers ───────────────────────────────────────────────────
       function _fbFmtPrice(v) {
         if (v == null || isNaN(v) || v === 0) return '—';
@@ -27894,6 +28235,141 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
         return out;
       }
 
+      // ── Virtual Scroll constants ──────────────────────────────────
+      var _FB_ROW_H   = 38;   // px — chiều cao mỗi row (min-height 30 + padding + border)
+      var _FB_BUFFER  = 6;    // số row buffer trên/dưới viewport
+      var _fbVsItems  = [];   // danh sách đã filter+sort (dùng chung giữa render + scroll)
+
+      // Khởi động scroll listener một lần duy nhất (lazy)
+      var _fbScrollListenerAttached = false;
+      function _attachFbScrollListener() {
+        if (_fbScrollListenerAttached) return;
+        var el = document.getElementById('fboardList');
+        if (!el) return;
+        _fbScrollListenerAttached = true;
+        el.addEventListener('scroll', function() {
+          if (!window._fbVsScrollPending) {
+            window._fbVsScrollPending = true;
+            requestAnimationFrame(function() {
+              window._fbVsScrollPending = false;
+              _renderFBoardVirtual(_fbVsItems);
+            });
+          }
+        }, { passive: true });
+      }
+
+      // ── Xây HTML cho 1 row (tách ra để dùng lại) ─────────────────
+      function _buildFBoardRowHtml(r) {
+        const st = _fbPriceState(r);
+        const pCls = 'fbc-price ' + (st.p || '');
+        const aCls = 'fbc-amt ' + (st.a || '');
+        const pctCls = 'fbc-pct ' + (st.a || '');
+        const amt = (r.chg_amt != null) ? r.chg_amt : 0;
+        const amtTxt = amt > 0 ? '+' + amt.toFixed(2) : amt.toFixed(2);
+        const chg = r.chg || 0;
+        const chgTxt = chg > 0 ? '+' + chg.toFixed(2) + '%' : chg.toFixed(2) + '%';
+        const sigKey = (r.signal || '').toUpperCase();
+        const sigLbl = _FB_SIG_LBL[sigKey] || '';
+        const sigHtml = sigLbl
+          ? '<span class="fbc-sig ' + sigKey + '" title="' + _fbEsc(r.signal) + '">' + sigLbl + '</span>'
+          : '<span style="color:var(--sub);font-size:9px">—</span>';
+
+        const valueB = (r.vol && r.price) ? ((r.vol * r.price) / 1e9) : 0;
+        const valueTxt = valueB > 0 ? (valueB >= 100 ? valueB.toFixed(0) : valueB.toFixed(1)) : '—';
+
+        const sPct = Math.max(-100, Math.min(100, r.shark_pct || 0));
+        const sStreak = r.shark_streak || 0;
+        const isShark = r.is_shark;
+        let barHtml = '';
+        if (Math.abs(sPct) >= 5 || sStreak >= 3) {
+          const w = Math.min(100, Math.max(8, Math.abs(sPct)));
+          const col = sPct >= 0
+            ? (isShark ? '#10b981' : '#34d399')
+            : (isShark ? '#ef4444' : '#f87171');
+          const align = sPct >= 0 ? 'left' : 'right';
+          const tip = (r.shark_label || '')
+            + (sStreak ? ' (' + sStreak + ' phiên)' : '')
+            + (r.shark_5d ? ' · 5p=' + (r.shark_5d / 1e9).toFixed(1) + 'tỷ' : '')
+            + (r.shark_velocity ? ' · Velocity x' + r.shark_velocity.toFixed(1) : '');
+          barHtml = '<div class="fbc-shark" title="' + _fbEsc(tip) + '">'
+            + '<div class="fbc-shark-bar" style="width:' + w + '%;background:' + col + ';float:' + align + '"></div>'
+            + '</div>';
+        } else {
+          barHtml = '<div class="fbc-shark"><div class="fbc-shark-bar fbc-shark-flat"></div></div>';
+        }
+        const fnToday = r.foreign_today || 0;
+        const fnStreak = r.foreign_streak || 0;
+        const fnLabel = r.foreign_label || '';
+        let fnBar = '';
+        if (Math.abs(fnToday) >= 0.5 || Math.abs(fnStreak) >= 3) {
+          const fnPct = Math.min(100, Math.max(8, Math.abs(fnToday) * 2));
+          const fnCol = fnToday >= 0 ? '#fbbf24' : '#fb923c';
+          const fnAlign = fnToday >= 0 ? 'left' : 'right';
+          const fnTip = (fnLabel || (fnToday >= 0 ? 'NN mua ròng' : 'NN bán ròng'))
+            + ' · Hôm nay ' + (fnToday >= 0 ? '+' : '') + fnToday.toFixed(1) + ' tỷ'
+            + (r.foreign_5d ? ' · 5p=' + r.foreign_5d.toFixed(1) + 'tỷ' : '');
+          fnBar = '<div class="fbc-shark" title="' + _fbEsc(fnTip) + '" style="margin-top:1px">'
+            + '<div class="fbc-shark-bar" style="width:' + fnPct + '%;background:' + fnCol + ';float:' + fnAlign + '"></div>'
+            + '</div>';
+        }
+        const sharkLbl = (r.shark_label && (sStreak >= 5 || isShark))
+          ? '<span class="fbc-shark-lbl" title="' + _fbEsc(r.shark_label) + '">' + _fbEsc(r.shark_label.replace(/^[^A-Z\d]+/, '').slice(0, 14)) + '</span>'
+          : (fnLabel && Math.abs(fnStreak) >= 3)
+            ? '<span class="fbc-shark-lbl" title="' + _fbEsc(fnLabel) + '" style="color:#fbbf24">' + _fbEsc(fnLabel.replace(/^[^A-Z\d]+/, '').slice(0, 14)) + '</span>'
+            : '';
+        const symInner = '<div class="fbc-sym-wrap">'
+          + '<span class="fbc-sym-text">' + _fbEsc(r.symbol) + '</span>'
+          + barHtml + fnBar + sharkLbl
+          + '</div>';
+
+        return '<div class="fboard-row" onclick="_mktClickSym(\'' + _fbEsc(r.symbol) + '\')">'
+          + '<span class="fbc-sym">' + symInner + '</span>'
+          + '<span class="fbc-name" title="' + _fbEsc(r.name || r.symbol) + '">' + _fbEsc(r.name || r.symbol) + '</span>'
+          + '<span class="fbc-tc">' + _fbFmtPrice(r.ref) + '</span>'
+          + '<span class="fbc-ceil">' + _fbFmtPrice(r.ceil) + '</span>'
+          + '<span class="fbc-floor">' + _fbFmtPrice(r.floor_p) + '</span>'
+          + '<span class="fbc-open">' + _fbFmtPrice(r.open) + '</span>'
+          + '<span class="fbc-high">' + _fbFmtPrice(r.high) + '</span>'
+          + '<span class="fbc-low">' + _fbFmtPrice(r.low) + '</span>'
+          + '<span class="' + pCls + '">' + _fbFmtPrice(r.price) + '</span>'
+          + '<span class="' + aCls + '">' + (amt ? amtTxt : '—') + '</span>'
+          + '<span class="' + pctCls + '">' + chgTxt + '</span>'
+          + '<span class="fbc-vol">' + _fbFmtVol(r.vol) + '</span>'
+          + '<span class="fbc-vavg">' + _fbFmtVol(r.vol_avg) + '</span>'
+          + '<span class="fbc-val">' + valueTxt + '</span>'
+          + sigHtml
+          + '</div>';
+      }
+
+      // ── Virtual render: chỉ render rows trong viewport ────────────
+      function _renderFBoardVirtual(items) {
+        var listEl = document.getElementById('fboardList');
+        if (!listEl) return;
+        _attachFbScrollListener();
+
+        var total = items.length;
+        if (!total) return;
+
+        var scrollTop = listEl.scrollTop;
+        var viewH    = listEl.clientHeight || 500;
+        var firstVis = Math.max(0, Math.floor(scrollTop / _FB_ROW_H) - _FB_BUFFER);
+        var lastVis  = Math.min(total, Math.ceil((scrollTop + viewH) / _FB_ROW_H) + _FB_BUFFER);
+
+        var topH = firstVis * _FB_ROW_H;
+        var botH = (total - lastVis) * _FB_ROW_H;
+
+        var html = '<div style="height:' + topH + 'px"></div>';
+        for (var i = firstVis; i < lastVis; i++) {
+          html += _buildFBoardRowHtml(items[i]);
+        }
+        html += '<div style="height:' + botH + 'px"></div>';
+
+        // Giữ scrollTop sau khi thay innerHTML
+        var savedScroll = listEl.scrollTop;
+        listEl.innerHTML = html;
+        listEl.scrollTop = savedScroll;
+      }
+
       // ── Render the rows ───────────────────────────────────────────
       function _renderFBoard() {
         const listEl = document.getElementById('fboardList');
@@ -27944,96 +28420,9 @@ Sell = Cross( MA(Close, 20), MA(Close, 10) );"
           return;
         }
 
-        let html = '';
-        items.forEach(function (r) {
-          const st = _fbPriceState(r);
-          const pCls = 'fbc-price ' + (st.p || '');
-          const aCls = 'fbc-amt ' + (st.a || '');
-          const pctCls = 'fbc-pct ' + (st.a || '');
-          const amt = (r.chg_amt != null) ? r.chg_amt : 0;
-          const amtTxt = amt > 0 ? '+' + amt.toFixed(2) : amt.toFixed(2);
-          const chg = r.chg || 0;
-          const chgTxt = chg > 0 ? '+' + chg.toFixed(2) + '%' : chg.toFixed(2) + '%';
-          const sigKey = (r.signal || '').toUpperCase();
-          const sigLbl = _FB_SIG_LBL[sigKey] || '';
-          const sigHtml = sigLbl
-            ? '<span class="fbc-sig ' + sigKey + '" title="' + _fbEsc(r.signal) + '">' + sigLbl + '</span>'
-            : '<span style="color:var(--sub);font-size:9px">—</span>';
-
-          // Giá trị giao dịch (tỷ VND): vol × price ÷ 1B (cho VN), price × 1000 vì giá VN tính theo nghìn
-          const valueB = (r.vol && r.price) ? ((r.vol * r.price) / 1e9) : 0;
-          const valueTxt = valueB > 0 ? (valueB >= 100 ? valueB.toFixed(0) : valueB.toFixed(1)) : '—';
-
-          // 🦈 Smart Money Flow / Shark bar (xanh = mua chủ động, đỏ = bán chủ động)
-          // r.shark_pct ∈ [-300, 300] thường — clamp về [-100,100] để vẽ bar
-          const sPct = Math.max(-100, Math.min(100, r.shark_pct || 0));
-          const sStreak = r.shark_streak || 0;
-          const sDir = r.shark_dir || 0;
-          const isShark = r.is_shark;
-          let barHtml = '';
-          if (Math.abs(sPct) >= 5 || sStreak >= 3) {
-            const w = Math.min(100, Math.max(8, Math.abs(sPct)));
-            const col = sPct >= 0
-              ? (isShark ? '#10b981' : '#34d399')   // xanh đậm = shark mua, xanh nhạt = mua thường
-              : (isShark ? '#ef4444' : '#f87171');  // đỏ đậm = shark bán, đỏ nhạt = bán thường
-            const align = sPct >= 0 ? 'left' : 'right';
-            const tip = (r.shark_label || '')
-              + (sStreak ? ' (' + sStreak + ' phiên)' : '')
-              + (r.shark_5d ? ' · 5p=' + (r.shark_5d / 1e9).toFixed(1) + 'tỷ' : '')
-              + (r.shark_velocity ? ' · Velocity x' + r.shark_velocity.toFixed(1) : '');
-            barHtml = '<div class="fbc-shark" title="' + _fbEsc(tip) + '">'
-              + '<div class="fbc-shark-bar" style="width:' + w + '%;background:' + col + ';float:' + align + '"></div>'
-              + '</div>';
-          } else {
-            barHtml = '<div class="fbc-shark"><div class="fbc-shark-bar fbc-shark-flat"></div></div>';
-          }
-          // 🌐 Foreign Flow bar (khối ngoại mua/bán ròng — màu vàng/cam phân biệt với shark)
-          const fnToday = r.foreign_today || 0;   // tỷ VND hôm nay
-          const fnStreak = r.foreign_streak || 0;  // signed
-          const fnLabel = r.foreign_label || '';
-          let fnBar = '';
-          if (Math.abs(fnToday) >= 0.5 || Math.abs(fnStreak) >= 3) {
-            const fnPct = Math.min(100, Math.max(8, Math.abs(fnToday) * 2));  // tỷ → bar width
-            const fnCol = fnToday >= 0 ? '#fbbf24' : '#fb923c';  // vàng = mua ròng, cam = bán ròng
-            const fnAlign = fnToday >= 0 ? 'left' : 'right';
-            const fnTip = (fnLabel || (fnToday >= 0 ? 'NN mua ròng' : 'NN bán ròng'))
-              + ' · Hôm nay ' + (fnToday >= 0 ? '+' : '') + fnToday.toFixed(1) + ' tỷ'
-              + (r.foreign_5d ? ' · 5p=' + r.foreign_5d.toFixed(1) + 'tỷ' : '');
-            fnBar = '<div class="fbc-shark" title="' + _fbEsc(fnTip) + '" style="margin-top:1px">'
-              + '<div class="fbc-shark-bar" style="width:' + fnPct + '%;background:' + fnCol + ';float:' + fnAlign + '"></div>'
-              + '</div>';
-          }
-          const sharkLbl = (r.shark_label && (sStreak >= 5 || isShark))
-            ? '<span class="fbc-shark-lbl" title="' + _fbEsc(r.shark_label) + '">' + _fbEsc(r.shark_label.replace(/^[^A-Z\d]+/, '').slice(0, 14)) + '</span>'
-            : (fnLabel && Math.abs(fnStreak) >= 3)
-              ? '<span class="fbc-shark-lbl" title="' + _fbEsc(fnLabel) + '" style="color:#fbbf24">' + _fbEsc(fnLabel.replace(/^[^A-Z\d]+/, '').slice(0, 14)) + '</span>'
-              : '';
-          const symInner = '<div class="fbc-sym-wrap">'
-            + '<span class="fbc-sym-text">' + _fbEsc(r.symbol) + '</span>'
-            + barHtml
-            + fnBar
-            + sharkLbl
-            + '</div>';
-
-          html += '<div class="fboard-row" onclick="_mktClickSym(\'' + _fbEsc(r.symbol) + '\')">'
-            + '<span class="fbc-sym">' + symInner + '</span>'
-            + '<span class="fbc-name" title="' + _fbEsc(r.name || r.symbol) + '">' + _fbEsc(r.name || r.symbol) + '</span>'
-            + '<span class="fbc-tc">' + _fbFmtPrice(r.ref) + '</span>'
-            + '<span class="fbc-ceil">' + _fbFmtPrice(r.ceil) + '</span>'
-            + '<span class="fbc-floor">' + _fbFmtPrice(r.floor_p) + '</span>'
-            + '<span class="fbc-open">' + _fbFmtPrice(r.open) + '</span>'
-            + '<span class="fbc-high">' + _fbFmtPrice(r.high) + '</span>'
-            + '<span class="fbc-low">' + _fbFmtPrice(r.low) + '</span>'
-            + '<span class="' + pCls + '">' + _fbFmtPrice(r.price) + '</span>'
-            + '<span class="' + aCls + '">' + (amt ? amtTxt : '—') + '</span>'
-            + '<span class="' + pctCls + '">' + chgTxt + '</span>'
-            + '<span class="fbc-vol">' + _fbFmtVol(r.vol) + '</span>'
-            + '<span class="fbc-vavg">' + _fbFmtVol(r.vol_avg) + '</span>'
-            + '<span class="fbc-val">' + valueTxt + '</span>'
-            + sigHtml
-            + '</div>';
-        });
-        listEl.innerHTML = html;
+        // ── Dùng virtual scroll: chỉ render ~25 rows đang hiển thị ──
+        _fbVsItems = items;
+        _renderFBoardVirtual(items);
       }
 
       // ── News + Watchlist panels (bottom split) ───────────────────
