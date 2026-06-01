@@ -1058,7 +1058,21 @@ def init_db():
         ]
         for k,v in defaults:
             c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", (k,str(v)))
-    
+
+    # ── MSB bank defaults: chỉ set nếu chưa có hoặc đang rỗng ──────────
+    _msb_defaults = [
+        ('payment_bank_bin',     '970422'),
+        ('payment_bank_account', '3320031982'),
+        ('payment_bank_name',    'MSB - Maritime Bank'),
+        ('payment_bank_owner',   'bùithanh vũ'),
+    ]
+    with get_db() as c:
+        for _k, _v in _msb_defaults:
+            _cur = c.execute("SELECT value FROM settings WHERE key=?", (_k,)).fetchone()
+            if not _cur or not (_cur['value'] or '').strip():
+                c.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)", (_k, _v))
+                log.info("[init] Set default %s = %s", _k, _v)
+
     # Migrations
     with get_db() as c:
         cols = [r[1] for r in c.execute("PRAGMA table_info(user_watchlist)").fetchall()]
@@ -1635,19 +1649,30 @@ def email_welcome(user_id: int) -> bool:
         app_name = get_setting('app_name', 'SMA Pro')
         pub_url  = get_setting('public_url', 'https://vnstock.io.vn')
         code = get_or_create_referral_code(user_id, u['username'])
+        trial_days = int(get_setting('trial_days', '7'))
         content = f"""
         <p>Xin chào <strong>{u['username']}</strong>,</p>
-        <p>Chào mừng bạn đến với <strong>{app_name}</strong> — phần mềm phân tích kỹ thuật cổ phiếu AI hàng đầu.</p>
+        <p>Chào mừng bạn đến với <strong>{app_name}</strong>! 🎉</p>
+        <p>Tài khoản của bạn đã được kích hoạt <strong style="color:#00e676">⭐ {trial_days} ngày dùng thử Premium miễn phí</strong> — bao gồm toàn bộ tính năng:</p>
         <div class="info-box">
           <div class="info-row"><span class="info-lbl">Tài khoản</span><span class="info-val">{u['username']}</span></div>
-          <div class="info-row"><span class="info-lbl">Gói hiện tại</span><span class="info-val green">Miễn phí</span></div>
+          <div class="info-row"><span class="info-lbl">Gói dùng thử</span><span class="info-val green">⭐ Premium {trial_days} ngày</span></div>
+          <div class="info-row"><span class="info-lbl">✅ 25 chỉ báo kỹ thuật AI</span><span class="info-val green">Đã mở khóa</span></div>
+          <div class="info-row"><span class="info-lbl">✅ Market Scanner realtime</span><span class="info-val green">Đã mở khóa</span></div>
+          <div class="info-row"><span class="info-lbl">✅ AI Analyst + tín hiệu</span><span class="info-val green">Đã mở khóa</span></div>
+          <div class="info-row"><span class="info-lbl">✅ Cảnh báo Telegram</span><span class="info-val green">Đã mở khóa</span></div>
           <div class="info-row"><span class="info-lbl">Mã giới thiệu</span><span class="info-val">{code}</span></div>
         </div>
-        <p><strong>Bắt đầu ngay:</strong></p>
-        <p>1️⃣ Thêm mã cổ phiếu (VCB, HPG, TCB...)<br/>2️⃣ Xem tín hiệu AI tự động<br/>3️⃣ Thiết lập cảnh báo Telegram<br/>4️⃣ Backtest chiến lược</p>
+        <p><strong>Bắt đầu ngay trong 3 bước:</strong></p>
+        <p>1️⃣ Thêm mã cổ phiếu quan tâm (VCB, HPG, TCB...)<br/>
+           2️⃣ Vào tab <b>⚡ Scanner</b> → xem tín hiệu PRE-BREAKOUT hôm nay<br/>
+           3️⃣ Thiết lập cảnh báo Telegram để nhận tín hiệu tức thì</p>
         <a href="{pub_url}" class="btn">🚀 Vào {app_name} ngay</a>
-        <p style="font-size:12px;color:#4a6180;margin-top:20px">Chia sẻ mã <b>{code}</b> để nhận thêm ngày Premium khi bạn bè đăng ký!</p>"""
-        return send_email(u['email'], f"Chào mừng đến với {app_name}!", _email_base_template(content))
+        <p style="font-size:12px;color:#4a6180;margin-top:16px">
+          💡 Sau {trial_days} ngày, tài khoản sẽ về gói Free. Nâng cấp Premium chỉ 299K/tháng để giữ toàn bộ tính năng.<br/>
+          Chia sẻ mã <b>{code}</b> để nhận thêm ngày Premium khi bạn bè đăng ký!
+        </p>"""
+        return send_email(u['email'], f"🎉 Chào mừng! {trial_days} ngày Premium miễn phí đã kích hoạt", _email_base_template(content))
     except Exception as e:
         log.debug("[email_welcome] %s", e); return False
 
@@ -1685,7 +1710,7 @@ def email_payment_invoice(payment_id: int) -> bool:
         log.debug("[email_invoice] %s", e); return False
 
 def email_expiry_warning(user_id: int, days_left: int) -> bool:
-    """Send expiry warning email (7d, 3d, 1d before expiry)."""
+    """Send expiry warning email — hỗ trợ cả trial và premium plan."""
     try:
         with get_db() as c:
             u = c.execute("SELECT username,email,plan,plan_expires FROM users WHERE id=?", (user_id,)).fetchone()
@@ -1694,9 +1719,28 @@ def email_expiry_warning(user_id: int, days_left: int) -> bool:
         pub_url  = get_setting('public_url', 'https://vnstock.io.vn')
         exp_date = (u.get('plan_expires') or '')[:10]
         urgency  = '🔴 KHẨN' if days_left <= 1 else ('🟠' if days_left <= 3 else '🟡')
-        plan_map = {'monthly':'Pro 1 tháng','quarter':'Pro 3 tháng','halfyear':'Pro 6 tháng','yearly':'Pro 12 tháng'}
+        is_trial = (u.get('plan') == 'trial')
+        plan_map = {'monthly':'Pro 1 tháng','quarter':'Pro 3 tháng','halfyear':'Pro 6 tháng',
+                    'yearly':'Pro 12 tháng','trial':'Dùng thử miễn phí'}
         plan_lbl = plan_map.get(u.get('plan',''), 'Premium')
-        content = f"""
+        if is_trial:
+            # Email đặc biệt cho trial — tập trung convert sang trả phí
+            urgency_txt = 'còn 1 ngày cuối' if days_left <= 1 else f'còn {days_left} ngày'
+            content = f"""
+        <p>Xin chào <strong>{u['username']}</strong>,</p>
+        <p>{urgency} Gói dùng thử <strong>7 ngày miễn phí</strong> của bạn {urgency_txt} — hết hạn ngày <strong style="color:#f97316">{exp_date}</strong>.</p>
+        <div class="info-box">
+          <div class="info-row"><span class="info-lbl">Bạn đã dùng thử</span><span class="info-val green">✅ 25 chỉ báo kỹ thuật AI</span></div>
+          <div class="info-row"><span class="info-lbl"></span><span class="info-val green">✅ Market Scanner realtime</span></div>
+          <div class="info-row"><span class="info-lbl"></span><span class="info-val green">✅ AI Analyst + tín hiệu BUY/SELL</span></div>
+          <div class="info-row"><span class="info-lbl">Hết hạn</span><span class="info-val red">{exp_date}</span></div>
+        </div>
+        <p>Nâng cấp ngay hôm nay để không bị gián đoạn. Chỉ <strong>299.000đ/tháng</strong> — hoặc tiết kiệm 30% với gói năm:</p>
+        <a href="{pub_url}/upgrade?plan=monthly" class="btn">⭐ Nâng cấp Premium — 299K/tháng</a>
+        <p style="font-size:12px;color:#4a6180;margin-top:12px">💡 Gói năm chỉ 208K/tháng · Hoàn tiền 30 ngày nếu không hài lòng · Huỷ bất kỳ lúc nào</p>"""
+            subject = f"{urgency} Trial của bạn hết hạn sau {days_left} ngày — Nâng cấp để tiếp tục"
+        else:
+            content = f"""
         <p>Xin chào <strong>{u['username']}</strong>,</p>
         <p>{urgency} Gói {plan_lbl} của bạn sẽ hết hạn trong <strong style="color:#f97316">{days_left} ngày</strong> (ngày {exp_date}).</p>
         <div class="info-box">
@@ -1705,10 +1749,61 @@ def email_expiry_warning(user_id: int, days_left: int) -> bool:
           <div class="info-row"><span class="info-lbl">Còn lại</span><span class="info-val yellow">{days_left} ngày</span></div>
         </div>
         <p>Gia hạn ngay để không bị gián đoạn — thời gian sẽ được cộng dồn nếu gia hạn trước khi hết:</p>
-        <a href="{pub_url}" class="btn">🔄 Gia hạn Premium ngay</a>"""
-        return send_email(u['email'], f"{urgency} Gói Premium của bạn còn {days_left} ngày", _email_base_template(content))
+        <a href="{pub_url}/upgrade" class="btn">🔄 Gia hạn Premium ngay</a>"""
+            subject = f"{urgency} Gói Premium của bạn còn {days_left} ngày"
+        return send_email(u['email'], subject, _email_base_template(content))
     except Exception as e:
         log.debug("[email_expiry] %s", e); return False
+
+
+def _trial_expiry_scheduler():
+    """Chạy hàng ngày lúc 9AM: kiểm tra trial/premium sắp hết → gửi email nhắc."""
+    import time as _t
+    while True:
+        try:
+            now = datetime.now()
+            # Tính giây đến 9AM hôm nay (hoặc ngày mai nếu đã qua 9AM)
+            next_9am = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            if now >= next_9am:
+                next_9am += timedelta(days=1)
+            _t.sleep((next_9am - now).total_seconds())
+            # Gửi email nhắc cho trial sắp hết (còn 2 ngày và 1 ngày)
+            with get_db() as c:
+                rows = c.execute("""
+                    SELECT id, plan,
+                           CAST(julianday(plan_expires) - julianday('now') AS INTEGER) as days_left
+                    FROM users
+                    WHERE email IS NOT NULL AND email != ''
+                      AND plan IS NOT NULL AND plan != 'free'
+                      AND plan_expires IS NOT NULL
+                      AND plan_expires > datetime('now')
+                      AND CAST(julianday(plan_expires) - julianday('now') AS INTEGER) IN (1, 2)
+                """).fetchall()
+            for row in rows:
+                try:
+                    threading.Thread(
+                        target=email_expiry_warning,
+                        args=(row['id'], row['days_left']),
+                        daemon=True
+                    ).start()
+                    log.info("[trial_sched] Email nhắc %s → %d ngày còn lại (plan=%s)",
+                             row['id'], row['days_left'], row['plan'])
+                except Exception as _e:
+                    log.debug("[trial_sched] %s", _e)
+        except Exception as _e:
+            log.debug("[trial_sched] outer error: %s", _e)
+            import time as _t2; _t2.sleep(3600)  # retry sau 1h nếu crash
+
+
+# Khởi động trial expiry scheduler (1 lần khi server start)
+try:
+    if '_trial_scheduler_started' not in globals():
+        _ts = threading.Thread(target=_trial_expiry_scheduler, daemon=True, name='trial-expiry-sched')
+        _ts.start()
+        _trial_scheduler_started = True
+        log.info("[trial_sched] Trial expiry scheduler started")
+except Exception as _tse:
+    log.warning("[trial_sched] Failed to start: %s", _tse)
 
 def broadcast_email(subject: str, message: str, target: str = 'all') -> dict:
     """Broadcast email to all/pro/free users."""
@@ -1781,12 +1876,16 @@ def user_register(username, password, email=None, phone=None, display_name=None)
     salt = secrets.token_hex(16)
     ph = _hash_pw(salt, password)
     try:
+        trial_days = int(get_setting('trial_days', '7'))
+        trial_expires = (datetime.now() + timedelta(days=trial_days)).strftime('%Y-%m-%d %H:%M:%S')
         with get_db() as c:
-            c.execute("""INSERT INTO users(username,password_h,salt,email,phone,display_name)
-                         VALUES(?,?,?,?,?,?)""",
-                      (username, ph, salt, email or None, phone or None, display_name or username))
+            c.execute("""INSERT INTO users(username,password_h,salt,email,phone,display_name,plan,plan_expires)
+                         VALUES(?,?,?,?,?,?,?,?)""",
+                      (username, ph, salt, email or None, phone or None, display_name or username,
+                       'trial', trial_expires))
             uid = c.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()['id']
-            _audit_log(uid, 'REGISTER', {'email': email, 'phone': phone}, None)
+            _audit_log(uid, 'REGISTER', {'email': email, 'phone': phone, 'trial_days': trial_days}, None)
+        log.info("[register] %s → trial %d ngày đến %s", username, trial_days, trial_expires)
         # Send welcome email (async)
         try:
             import threading
@@ -2031,6 +2130,57 @@ def broadcast_update(data):
             loop.run_until_complete(_broadcast())
     except Exception as e:
         log.debug("[WS] broadcast error: %s", e)
+
+# ── Broadcast queue: 1 worker thread thay vì spawn-per-symbol ────
+_broadcast_queue = queue.Queue(maxsize=500)
+
+def _broadcast_worker():
+    """Single background thread xử lý tất cả broadcast — tránh spawn 316 threads."""
+    while True:
+        try:
+            msg = _broadcast_queue.get(timeout=5)
+            if msg and connected_clients:
+                broadcast_update(msg)
+        except queue.Empty:
+            continue
+        except Exception as _e:
+            log.debug("[broadcast_worker] %s", _e)
+
+threading.Thread(target=_broadcast_worker, daemon=True, name='broadcast-worker').start()
+
+
+def _broadcast_cache_update(sym, data):
+    """Enqueue market board row update — không spawn thread, không block fetch().
+    Worker thread duy nhất sẽ gửi khi có WS client.
+    """
+    if not connected_clients or not data:
+        return
+    try:
+        a = data.get('analysis') or {}
+        bars = data.get('history', [])
+        vol_avg20 = (sum(b['v'] for b in bars[-20:]) // 20) if len(bars) >= 20 else 0
+        _broadcast_queue.put_nowait({
+            'type':    'market_board_update',
+            'symbol':  sym,
+            'name':    data.get('name', sym),
+            'price':   data.get('price', 0),
+            'chg':     round(data.get('chg', 0), 2),
+            'chg_amt': round(data.get('price', 0) - data.get('close', 0), 2),
+            'vol':     data.get('vol', 0),
+            'vol_avg': vol_avg20,
+            'high':    data.get('high', 0),
+            'low':     data.get('low', 0),
+            'open':    data.get('open', 0),
+            'close':   data.get('close', 0),
+            'signal':  a.get('signal', ''),
+            'score':   a.get('total', 0),
+            'rsi':     round(a.get('rsi', 50), 1),
+        })
+    except queue.Full:
+        pass  # Queue đầy → bỏ qua, không block fetch()
+    except Exception as _bce:
+        log.debug("[WS] _broadcast_cache_update %s: %s", sym, _bce)
+
 
 def start_websocket():
     """Start WebSocket server in a new thread with proper event loop.
@@ -3469,6 +3619,7 @@ def fetch(sym, mkt, force=False):
             data = _build_from_db(sym, mkt, bars, meta)
             _ram_cache[sym] = {'ts': time.time(), 'data': data}
             log.debug("[fetch] Tier2 DB-fresh %s age=%.1fh bars=%d", sym, meta_age, len(bars))
+            _broadcast_cache_update(sym, data)  # enqueue, non-blocking
             return data
 
     # ── Tier 3: API live ─────────────────────────────────────
@@ -3508,6 +3659,7 @@ def fetch(sym, mkt, force=False):
         bars = db_load_ohlcv(sym, OHLCV_BARS)
         data = _build_from_db(sym, mkt, bars or raw['history'][:100], db_get_meta(sym) or meta)
         _ram_cache[sym] = {'ts': time.time(), 'data': data}
+        _broadcast_cache_update(sym, data)  # enqueue, non-blocking
         return data
 
     # ── Tier 4: DB stale (bất kỳ tuổi) ──────────────────────
@@ -7292,6 +7444,78 @@ def backtest(history, capital=10_000_000, market="VN", risk_per_trade=0.02):
             "survivorship_warning": "Kết quả chỉ bao gồm mã đang niêm yết. Mã đã hủy niêm yết (FLC, ROS...) không được tính — backtest có thể lạc quan hơn thực tế.",
             "trades":trades[-20:],"equity_curve":equity[-150:]}
 
+
+# ── 📊 Backtest VN30 THẬT → số liệu công khai cho /methodology ──────────────
+_VN30_SYMBOLS = ['ACB','BCM','BID','BVH','CTG','FPT','GAS','GVR','HDB','HPG','MBB',
+                 'MSN','MWG','PLX','POW','SAB','SHB','SSB','SSI','STB','TCB','TPB',
+                 'VCB','VHM','VIB','VIC','VJC','VNM','VPB','VRE']
+_BACKTEST_VN30_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backtest_vn30_results.json')
+
+def _run_vn30_backtest():
+    """Chạy backtest engine trên VN30 với DATA THẬT → aggregate metrics → lưu JSON.
+    Chạy trong background thread (30 mã × ~2000 phiên). /methodology đọc kết quả này."""
+    import statistics as _st
+    results = []; wins_total = 0; trades_total = 0
+    rets = []; mdds = []; pfs = []; rrs = []; sharpes = []; bars_max = 0
+    for sym in _VN30_SYMBOLS:
+        try:
+            bars = db_load_ohlcv(sym, OHLCV_BARS)
+            if not bars or len(bars) < 250:  # cần ≥1 năm data
+                continue
+            r = backtest(bars, 100_000_000, market='VN')
+            tt = r.get('total_trades', 0)
+            if tt < 1:
+                continue
+            aw = r.get('avg_win_pct', 0); al = abs(r.get('avg_loss_pct', 0)) or 1
+            wins_total += r.get('wins', 0); trades_total += tt
+            rets.append(r.get('profit_pct', 0)); mdds.append(r.get('max_drawdown', 0))
+            pfs.append(min(r.get('profit_factor', 0) or 0, 10)); rrs.append(aw / al)
+            ec = r.get('equity_curve', [])
+            if len(ec) > 20:
+                dr = [(ec[i] - ec[i-1]) / ec[i-1] for i in range(1, len(ec)) if ec[i-1]]
+                if dr and _st.pstdev(dr) > 0:
+                    sharpes.append(_st.mean(dr) / _st.pstdev(dr) * (252 ** 0.5))
+            bars_max = max(bars_max, len(bars))
+            results.append({'sym': sym, 'trades': tt, 'win_rate': round(r.get('win_rate', 0), 1),
+                            'return_pct': round(r.get('profit_pct', 0), 1)})
+        except Exception as e:
+            log.debug(f"[bt_vn30] {sym}: {e}")
+    n = len(results)
+    # Win rate TRUNG BÌNH có trọng số theo số lệnh (nhất quán với per-stock) — KHÔNG chia total_trades
+    twr = (sum(s['win_rate'] * s['trades'] for s in results) / sum(s['trades'] for s in results)) if results else 0
+    wr_frac = twr / 100.0
+    avg_rr_v = _st.mean(rrs) if rrs else 0
+    # Expectancy (kỳ vọng mỗi lệnh, đơn vị R) = win%×R:R − loss% — robust hơn Sharpe cho hệ trade-based
+    exp_r = round(wr_frac * avg_rr_v - (1 - wr_frac), 2)
+    mdds_abs = [abs(m) for m in mdds]
+    out = {
+        'updated': time.strftime('%Y-%m-%d'), 'universe': 'VN30', 'n_stocks': n,
+        'years': round(bars_max / 250, 1) if bars_max else 0,
+        'total_trades': trades_total,
+        'win_rate': round(twr, 1),
+        'avg_return_pct': round(_st.mean(rets), 1) if rets else 0,
+        'avg_rr': round(avg_rr_v, 2),
+        'profit_factor': round(_st.mean(pfs), 2) if pfs else 0,
+        'expectancy_r': exp_r,
+        'avg_max_drawdown': round(_st.mean(mdds_abs), 1) if mdds_abs else 0,
+        'worst_max_drawdown': round(max(mdds_abs), 1) if mdds_abs else 0,
+        'per_stock': sorted(results, key=lambda x: -x['win_rate'])[:30],
+    }
+    try:
+        with open(_BACKTEST_VN30_FILE, 'w', encoding='utf-8') as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+        log.warning(f"[bt_vn30] DONE: {n} mã · win_rate={out['win_rate']}% · sharpe={out['sharpe']} · maxDD={out['max_drawdown']}%")
+    except Exception as e:
+        log.warning(f"[bt_vn30] save fail: {e}")
+    return out
+
+def _load_vn30_backtest():
+    try:
+        with open(_BACKTEST_VN30_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
 def _precompute_analyze_cache(history, start_i=55):
     """
     Pre-compute analyze() cho mọi bar từ start_i-5 đến cuối.
@@ -7384,9 +7608,16 @@ def _run_backtest_segment(history, capital, market, risk_per_trade, start_i=55,
         # Signal: cache[i] = analyze(history[:i]) = close bar i-1
         # Execute trên open bar i → không look-ahead bias
         a_sig = _get_a(i)
-        if a_sig.get("total", 0) >= 7 and shares == 0:
-            pending_signal = "BUY"
-        elif a_sig.get("total", 0) <= -7 and shares > 0:
+        _sc = a_sig.get("total", 0)
+        if _sc >= 10 and shares == 0:
+            # 🎯 Filter chất lượng (tăng win-rate): conviction cao (≥10) + xu hướng tăng (giá > MA50)
+            _ma50_ok = True
+            if i >= 50:
+                _ma50 = sum(float(history[j]["c"]) for j in range(i - 50, i)) / 50.0
+                _ma50_ok = p_close > _ma50
+            if _ma50_ok:
+                pending_signal = "BUY"
+        elif _sc <= -7 and shares > 0:
             pending_signal = "SELL"
 
         equity.append(round(cash+shares*p_close, 2))
@@ -9785,6 +10016,15 @@ def start_refresh():
                         # Fallback: nếu user_watchlist trống, dùng global watchlist
                         rows=c.execute("SELECT symbol,market FROM watchlist ORDER BY added_at").fetchall()
                 threshold=int(get_setting('alert_threshold','8'))
+                # Mã ĐANG NẮM GIỮ (vị thế OPEN) — gate banner giống Telegram:
+                # banner tư vấn (RSI/SR/TP/volume/nến/smart money...) CHỈ cho mã đang giữ;
+                # banner tín hiệu CHỈ khi mạnh (≥14/25 & conf≥70%) hoặc mã đang giữ.
+                try:
+                    with get_db() as _hc:
+                        _held_syms = {row[0] for row in _hc.execute(
+                            "SELECT DISTINCT symbol FROM journal WHERE status='OPEN'").fetchall()}
+                except Exception:
+                    _held_syms = set()
                 for r in rows:
                     sym,mkt=r["symbol"],r["market"]
                     # Chỉ refresh khi RAM cache hết hạn
@@ -9794,7 +10034,7 @@ def start_refresh():
                     if _cached_d and _cached_a:
                         try:
                             _sa_ts2 = getattr(loop, '_sa_ts', {})
-                            def _sa_ok2(k, ttl=3600): return time.time() - _sa_ts2.get(f"{sym}_{k}", 0) > ttl
+                            def _sa_ok2(k, ttl=3600): return (sym in _held_syms) and (time.time() - _sa_ts2.get(f"{sym}_{k}", 0) > ttl)
                             def _sa_mark2(k): _sa_ts2[f"{sym}_{k}"] = time.time(); setattr(loop, '_sa_ts', _sa_ts2)
                             _p2 = _cached_d.get('price', 0); _vn2 = mkt == 'VN'
                             _fp2 = lambda v: f"{round(v):,}đ" if _vn2 else f"${v:.2f}"
@@ -9878,8 +10118,8 @@ def start_refresh():
                                  datetime.now().isoformat()))
                     except Exception as _ace:
                         log.debug("[refresh] analysis_cache save %s: %s", sym, _ace)
-                    # Push INFO banner for medium signals (score 5-7)
-                    if abs(a["total"]) >= 5 and abs(a["total"]) < threshold:
+                    # Push INFO banner for medium signals (score 5-7) — CHỈ cho mã đang giữ (giống Telegram)
+                    if abs(a["total"]) >= 5 and abs(a["total"]) < threshold and sym in _held_syms:
                         sig_med = a["signal"]
                         if 'BUY' in sig_med or 'SELL' in sig_med:
                             _med_key = f"{sym}_{sig_med}_med"
@@ -9903,28 +10143,29 @@ def start_refresh():
                             if not last or (datetime.now()-datetime.fromisoformat(last["created_at"])).total_seconds()>3600:
                                 c2.execute("INSERT INTO alerts(symbol,market,signal,score,price,timeframe,detail) VALUES(?,?,?,?,?,?,?)",
                                            (sym,mkt,a["signal"],a["total"],data["price"],'1D',json.dumps(a["details"])))
-                                # v18: Breakout D+1 gap filter trước khi gửi Telegram
+                                # v18: Breakout D+1 gap filter + chỉ GOM tín hiệu MẠNH (≥14/25 & conf≥70%)
                                 should_send, gap_reason = check_breakout_d1_gap(sym, mkt, a["signal"])
-                                if should_send:
-                                    is_first = _digest_add(sym, mkt, a["signal"], a["total"], data["price"], '1D', a["details"], a)
-                                    if is_first:
-                                        global _alert_digest_ts
-                                        _alert_digest_ts = time.time()
-                                else:
+                                if should_send and is_strong_signal(a):
+                                    _digest_add(sym, mkt, a["signal"], a["total"], data["price"], '1D', a["details"], a)
+                                elif not should_send:
                                     log.debug("[Alert] %s suppressed by gap filter", sym)
-                            # ── Push to live banner (KHÔNG phụ thuộc gap filter) ──
-                            sig_str = a["signal"]
-                            lvl = 'CRITICAL' if 'STRONG' in sig_str else 'WARNING'
-                            icon = '🟢' if 'BUY' in sig_str else '🔴'
-                            vn_f = mkt == 'VN'
-                            fp_f = lambda v: f"{round(v):,}đ" if vn_f else f"${v:.2f}"
-                            conf_lbl = a.get('confluence_label', '')
-                            push_live_alert(
-                                sym, mkt, lvl,
-                                f"{icon} {sig_str.replace('_',' ')} — {sym}",
-                                f"{fp_f(data['price'])} · Score: {a['total']:+d}/25 · {conf_lbl}",
-                                action='Nhấn để xem phân tích'
-                            )
+                                else:
+                                    log.debug("[Alert] %s chưa đủ mạnh (score=%s conf=%s) — bỏ qua TG",
+                                              sym, a.get('total'), a.get('confidence'))
+                            # ── Push banner — CHỈ tín hiệu MẠNH (≥14/25 & conf≥70%) hoặc mã đang giữ (giống Telegram) ──
+                            if is_strong_signal(a) or sym in _held_syms:
+                                sig_str = a["signal"]
+                                lvl = 'CRITICAL' if 'STRONG' in sig_str else 'WARNING'
+                                icon = '🟢' if 'BUY' in sig_str else '🔴'
+                                vn_f = mkt == 'VN'
+                                fp_f = lambda v: f"{round(v):,}đ" if vn_f else f"${v:.2f}"
+                                conf_lbl = a.get('confluence_label', '')
+                                push_live_alert(
+                                    sym, mkt, lvl,
+                                    f"{icon} {sig_str.replace('_',' ')} — {sym}",
+                                    f"{fp_f(data['price'])} · Score: {a['total']:+d}/25 · {conf_lbl}",
+                                    action='Nhấn để xem phân tích'
+                                )
                     # MTF consensus alert — chỉ tính MTF khi 1D có dấu hiệu
                     if abs(a["total"]) >= max(3, threshold//2):
                         mtf = analyze_mtf(data)
@@ -9940,12 +10181,23 @@ def start_refresh():
                             if not last_mtf or (datetime.now()-datetime.fromisoformat(last_mtf["created_at"])).total_seconds()>14400:
                                 c2.execute("INSERT INTO alerts(symbol,market,signal,score,price,timeframe,detail) VALUES(?,?,?,?,?,?,?)",
                                         (sym,mkt,con_sig,con_score,data["price"],'MTF',json.dumps({"consensus":con,"1D":mtf["1D"]["total"],"1W":mtf["1W"]["total"],"1M":mtf["1M"]["total"]})))
-                                _nl_mtf=_get_alert_context(sym,mkt)
-                                msg_mtf=fmt_alert_mtf(sym,mkt,con,con_score,data["price"],mtf,news_lines=_nl_mtf)
-                                threading.Thread(target=tg_send_to_subscribers,args=(sym,msg_mtf),daemon=True).start()
+                                # GỘP MTF vào digest tín hiệu chính (không gửi riêng — giảm tần suất).
+                                # Dedup theo (mã, hướng) sẽ tự gộp với tín hiệu 1D nếu cùng chiều.
+                                _digest_add(sym, mkt, con_sig, a["total"], data["price"], 'MTF',
+                                            {"consensus":con,"1D":mtf["1D"]["total"],
+                                             "1W":mtf["1W"]["total"],"1M":mtf["1M"]["total"]}, a)
+                    # SL/TP Alert — CHỈ gửi cho mã ĐANG NẮM GIỮ (có vị thế OPEN trong Journal).
+                    # Trước đây bắn cho MỌI mã watchlist khi giá gần mức ATR tính sẵn → spam hàng loạt.
+                    _has_open_pos = False
+                    try:
+                        with get_db() as _cpos:
+                            _has_open_pos = _cpos.execute(
+                                "SELECT 1 FROM journal WHERE symbol=? AND status='OPEN' LIMIT 1",
+                                (sym,)).fetchone() is not None
+                    except Exception: pass
                     # SL Alert khi giá gần stop loss
                     sl=a.get("stop_loss",0); pnow=data.get("price",0)
-                    if sl and sl>0 and pnow>0:
+                    if _has_open_pos and sl and sl>0 and pnow>0:
                         sl_pct=(pnow-sl)/pnow*100
                         if sl_pct<3.0:
                             with get_db() as c2:
@@ -9967,7 +10219,7 @@ def start_refresh():
                     try:
                         tp1=a.get('take_profit',0); tp2=a.get('take_profit2',0)
                         for lv,nm in [(tp1,'TP1 (2×ATR)'),(tp2,'TP2 (3×ATR)')]:
-                            if not lv or not pnow: continue
+                            if not _has_open_pos or not lv or not pnow: continue
                             if pnow >= lv*0.998:
                                 sig_key=f'TP1_{sym}' if nm.startswith('TP1') else f'TP2_{sym}'
                                 with get_db() as c2:
@@ -10014,7 +10266,7 @@ def start_refresh():
                         _sa_ts = getattr(loop, '_sa_ts', {})
                         _sa_key = lambda k: f"{sym}_{k}"
                         def _sa_ok(k, ttl=3600):
-                            return time.time() - _sa_ts.get(_sa_key(k), 0) > ttl
+                            return (sym in _held_syms) and (time.time() - _sa_ts.get(_sa_key(k), 0) > ttl)
                         def _sa_mark(k):
                             _sa_ts[_sa_key(k)] = time.time()
                             loop._sa_ts = _sa_ts
@@ -10315,36 +10567,77 @@ def start_refresh():
             time.sleep(3)
     threading.Thread(target=tg_loop, daemon=True).start()
 
-# ── ALERT DIGEST ────────────────────────────────────────────
+# ── ALERT DIGEST — "Chất lượng > số lượng" (rework 2026-05-31) ──
+# Chỉ GOM & gửi tín hiệu THẬT SỰ MẠNH, tần suất thấp:
+#   • Tín hiệu mạnh = |score| ≥ 14/25 VÀ confidence ≥ 70%
+#   • Gom mọi tín hiệu mạnh trong cửa sổ 2 GIỜ → 1 tin tổng hợp
+#   • Tối đa 3 tin Telegram/ngày (chống alert fatigue)
+#   • Cùng (mã, hướng) phải chờ 12h mới được báo lại
 _alert_digest_buffer = []
 _alert_digest_lock = threading.Lock()
 _alert_digest_ts = 0.0
-DIGEST_WINDOW = 1800
+DIGEST_WINDOW       = 7200      # 2h — gom tín hiệu trước khi gửi
+DIGEST_FORCE_COUNT  = 12        # buffer quá lớn thì gửi sớm
+DIGEST_DAILY_CAP    = 3         # tối đa 3 tin Telegram/ngày
+DIGEST_SYM_COOLDOWN = 43200     # 12h cooldown per (mã, hướng)
+STRONG_SCORE_MIN    = 14        # /25 — ngưỡng "tín hiệu mạnh"
+STRONG_CONF_MIN     = 70        # % confidence tối thiểu
+_digest_sym_cooldown = {}       # {(sym, signal): last_sent_ts}
+_digest_daily = {'date': '', 'count': 0}
+
+def is_strong_signal(a):
+    """Tín hiệu BUY/SELL có đủ mạnh để gửi Telegram không?
+    Yêu cầu: hướng rõ ràng + |score| ≥ 14/25 + confidence ≥ 70%."""
+    sig = a.get('signal', 'NEUTRAL') or 'NEUTRAL'
+    if 'BUY' not in sig and 'SELL' not in sig:
+        return False
+    score = abs(int(a.get('total', 0) or 0))
+    conf  = float(a.get('confidence', 0) or 0)
+    return score >= STRONG_SCORE_MIN and conf >= STRONG_CONF_MIN
 
 def _digest_add(sym, mkt, signal, total, price, tf, details, extra=None):
-    """Thêm alert vào buffer digest. Trả về True nếu đây là alert đầu tiên (cần gửi ngay)."""
+    """Gom 1 tín hiệu mạnh vào buffer. Trả về True nếu là tín hiệu đầu của cửa sổ."""
     global _alert_digest_ts
     with _alert_digest_lock:
         # Dedup: không thêm trùng (sym, signal) trong window hiện tại
         for item in _alert_digest_buffer:
             if item[0] == sym and item[2] == signal: return False
+        if not _alert_digest_buffer:
+            _alert_digest_ts = time.time()   # bắt đầu đếm cửa sổ 2h
         _alert_digest_buffer.append((sym, mkt, signal, total, price, tf, details, extra or {}))
         return len(_alert_digest_buffer) == 1
 
 def _digest_flush():
-    """Gửi digest tổng hợp nếu đã đủ thời gian hoặc đủ số lượng."""
+    """Gửi digest gom tín hiệu mạnh: chờ đủ 2h, tối đa 3 tin/ngày, cooldown 12h/mã."""
     global _alert_digest_ts, _alert_digest_buffer
     now = time.time()
+    today = datetime.now().strftime('%Y%m%d')
     with _alert_digest_lock:
         if not _alert_digest_buffer: return
-        # Gửi khi: 30 phút trôi qua HOẶC có 5+ alerts
-        if now - _alert_digest_ts < DIGEST_WINDOW and len(_alert_digest_buffer) < 5:
+        # Chỉ gửi khi đã gom đủ 2h (hoặc buffer quá lớn)
+        if now - _alert_digest_ts < DIGEST_WINDOW and len(_alert_digest_buffer) < DIGEST_FORCE_COUNT:
             return
-        items = list(_alert_digest_buffer)
+        # Reset bộ đếm theo ngày
+        if _digest_daily.get('date') != today:
+            _digest_daily['date'] = today
+            _digest_daily['count'] = 0
+        # Đạt trần 3 tin/ngày → giữ buffer chờ ngày mới (tránh phình quá 20 mã mạnh nhất)
+        if _digest_daily['count'] >= DIGEST_DAILY_CAP:
+            _alert_digest_ts = now
+            if len(_alert_digest_buffer) > 20:
+                _alert_digest_buffer.sort(key=lambda x: -abs(x[3]))
+                del _alert_digest_buffer[20:]
+            return
+        # Lọc cooldown 12h per (mã, hướng)
+        items = [it for it in _alert_digest_buffer
+                 if now - _digest_sym_cooldown.get((it[0], it[2]), 0) >= DIGEST_SYM_COOLDOWN]
         _alert_digest_buffer.clear()
         _alert_digest_ts = now
+        if not items: return
+        for it in items:
+            _digest_sym_cooldown[(it[0], it[2])] = now
+        _digest_daily['count'] += 1
     # Build digest message
-    if not items: return
     if len(items) == 1:
         # Chỉ 1 alert → gửi bình thường
         sym, mkt, signal, total, price, tf, details, extra = items[0]
@@ -20746,6 +21039,20 @@ def _seo_api_sitemap_stats() -> dict:
 # ── Cached footer HTML — recomputed mỗi 1h ──
 _SEO_FOOTER_CACHE = {'html': None, 'ts': 0}
 
+def _get_lang_switcher_html() -> str:
+    r"""Bộ chuyển ngôn ngữ 2 lá cờ (🇻🇳 Việt mặc định / 🇺🇸 English) — fixed góc trên phải.
+    Cờ vẽ bằng SVG inline → render giống nhau mọi nền tảng (kể cả Windows). Click = đổi VN↔EN."""
+    return r'''<!-- vnstock-lang-switch -->
+<div id="vnsLang" style="position:fixed;top:10px;right:12px;z-index:99999;display:flex;gap:6px;align-items:center;background:rgba(12,16,24,.82);padding:5px 7px;border-radius:9px;border:1px solid rgba(91,157,255,.35);box-shadow:0 2px 10px rgba(0,0,0,.35)">
+<a href="javascript:void(0)" onclick="vnsSetLang('vi')" title="Tiếng Việt" id="vnsFlagVI" style="line-height:0;border:2px solid transparent;border-radius:4px;overflow:hidden;cursor:pointer"><svg width="24" height="16" viewBox="0 0 30 20" style="display:block"><rect width="30" height="20" fill="#da251d"/><polygon points="15,4 16.41,8.06 20.71,8.15 17.28,10.74 18.53,14.85 15,12.4 11.47,14.85 12.72,10.74 9.29,8.15 13.59,8.06" fill="#ff0"/></svg></a>
+<a href="javascript:void(0)" onclick="vnsSetLang('en')" title="English" id="vnsFlagEN" style="line-height:0;border:2px solid transparent;border-radius:4px;overflow:hidden;cursor:pointer"><svg width="24" height="16" viewBox="0 0 30 20" style="display:block"><rect width="30" height="20" fill="#b22234"/><rect y="1.54" width="30" height="1.54" fill="#fff"/><rect y="4.62" width="30" height="1.54" fill="#fff"/><rect y="7.69" width="30" height="1.54" fill="#fff"/><rect y="10.77" width="30" height="1.54" fill="#fff"/><rect y="13.85" width="30" height="1.54" fill="#fff"/><rect y="16.92" width="30" height="1.54" fill="#fff"/><rect width="12" height="10.77" fill="#3c3b6e"/></svg></a>
+</div>
+<script>
+function vnsSetLang(l){location.href=(l==='en')?'/en/':'/';}
+(function(){var e=/^\/en(\/|$)/.test(location.pathname),v=document.getElementById('vnsFlagVI'),n=document.getElementById('vnsFlagEN');if(v&&n){v.style.borderColor=e?'transparent':'#5b9dff';n.style.borderColor=e?'#5b9dff':'transparent';v.style.opacity=e?'.5':'1';n.style.opacity=e?'1':'.5';}})();
+</script>'''
+
+
 def _get_seo_footer_html() -> str:
     """Return sitewide SEO footer với cross-links đến 10+ sections.
     Auto-injected vào mọi HTML response trước </body>.
@@ -20821,6 +21128,7 @@ def _get_seo_footer_html() -> str:
 <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding-top:20px;border-top:1px solid #1e2d47;font-size:13px">
 <a href="/" style="color:#5b9dff">🏠 Trang chủ</a> ·
 <a href="/app" style="color:#5b9dff">🚀 Ứng dụng</a> ·
+<a href="/ask" style="color:#00e676;font-weight:700">🤖 Hỏi AI</a> ·
 <a href="/top" style="color:#5b9dff">📊 Bảng xếp hạng</a> ·
 <a href="/phan-tich" style="color:#5b9dff">📈 Phân tích mã</a> ·
 <a href="/search" style="color:#5b9dff">🔎 Tìm kiếm</a> ·
@@ -20831,8 +21139,7 @@ def _get_seo_footer_html() -> str:
 <a href="/tools" style="color:#5b9dff">🛠 Tools</a> ·
 <a href="/screener" style="color:#5b9dff">🎯 Screener</a> ·
 <a href="/glossary" style="color:#5b9dff">📚 Từ điển</a> ·
-<a href="/compare-stocks" style="color:#5b9dff">⚔️ So sánh CP</a> ·
-<a href="/en/" style="color:#5b9dff">🇬🇧 English</a>
+<a href="/compare-stocks" style="color:#5b9dff">⚔️ So sánh CP</a>
 </div>
 <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding-top:16px;margin-top:12px;border-top:1px solid #1e2d47;font-size:12px;color:#4a6180">
 <a href="/about" style="color:#9fb3d0">Về chúng tôi</a> ·
@@ -20855,6 +21162,35 @@ def _get_seo_footer_html() -> str:
     _SEO_FOOTER_CACHE['html'] = html
     _SEO_FOOTER_CACHE['ts'] = now
     return html
+
+
+def _get_seo_footer_en_html() -> str:
+    """English SEO footer — inject vào trang /en/. Chỉ link tới trang /en/ ĐÃ tồn tại
+    (strategies, best, glossary) + app pages (App, Ask AI, Blog) → không 404."""
+    return '''<!-- vnstock-seo-footer -->
+<footer style="background:#0c1018;border-top:1px solid #1e2d47;margin-top:40px;padding:32px 24px 20px;font-family:'Be Vietnam Pro',system-ui,sans-serif;color:#e2edff">
+<div style="max-width:1200px;margin:0 auto">
+<div style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding-bottom:18px;font-size:14px">
+<a href="/en/">🏠 Home</a> ·
+<a href="/app">🚀 Open App</a> ·
+<a href="/ask" style="color:#00e676;font-weight:700">🤖 Ask AI</a> ·
+<a href="/en/strategies">🎓 Strategies</a> ·
+<a href="/en/best">🏆 Best Stocks</a> ·
+<a href="/en/glossary">📚 Glossary</a> ·
+<a href="/blog">📰 Blog</a>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding-top:16px;border-top:1px solid #1e2d47;font-size:12px;color:#4a6180">
+<a href="/about" style="color:#9fb3d0">About</a> ·
+<a href="/editorial-policy" style="color:#9fb3d0">Editorial</a> ·
+<a href="/methodology" style="color:#9fb3d0">Methodology</a> ·
+<a href="/privacy" style="color:#9fb3d0">Privacy</a> ·
+<a href="/terms" style="color:#9fb3d0">Terms</a> ·
+<a href="/" style="color:#9fb3d0">🇻🇳 Tiếng Việt</a>
+</div>
+<p style="text-align:center;color:#4a6180;font-size:11px;margin-top:16px">© 2026 Vnstock.io.vn — AI-Powered Vietnam Stock Analysis · Realtime TCBS data · <strong>NOT investment advice</strong> · <a href="/terms" style="color:#4a6180">Disclaimer</a></p>
+</div>
+</footer>
+<style>footer a{color:#5b9dff;text-decoration:none;margin-right:4px}footer a:hover{color:#00e676;text-decoration:underline}</style>'''
 
 
 def _subscribe_cta_html(variant: str = 'inline') -> str:
@@ -20904,7 +21240,7 @@ def _vip_signal_cta_html(sym: str, signal: str = 'NEUTRAL', score: float = 0,
 
     Mục tiêu: bắt đúng dòng traffic 'khát khao câu trả lời' → đẩy sang /upgrade.
     Text đổi theo signal: BUY = FOMO mạnh, SELL = bảo vệ vốn, NEUTRAL = theo dõi.
-    Link thẳng /upgrade?plan=pro_monthly (gói rẻ nhất 99K → conversion cao nhất).
+    Link thẳng /upgrade?plan=pro_monthly (Premium 299K/tháng).
     """
     sym = (sym or '').upper()
     try:
@@ -20935,15 +21271,26 @@ def _vip_signal_cta_html(sym: str, signal: str = 'NEUTRAL', score: float = 0,
         accent = '#2563eb'
 
     price_line = f' · Giá hiện tại {price:,.0f}đ' if price else ''
+    # 🤝 Affiliate TCBS — nút Mở TK/Đặt lệnh (DORMANT nếu chưa set tcbs_affiliate_url). Dùng {{sym}} làm placeholder mã.
+    aff_btn = ''
+    try:
+        aff_url = (get_setting('tcbs_affiliate_url', '') or '').strip()
+    except Exception:
+        aff_url = ''
+    if aff_url and signal in ('STRONG_BUY', 'BUY', 'BUY_WARN', 'WEAK_BUY'):
+        aff_link = aff_url.replace('{sym}', sym)
+        aff_btn = (f'<a href="{aff_link}" target="_blank" rel="nofollow sponsored" '
+                   f'style="padding:13px 22px;background:#ffce00;color:#0a0e1a;border-radius:8px;text-decoration:none;font-weight:800;font-size:14px;display:inline-block">⚡ Mở TK TCBS · Đặt lệnh {sym}</a>')
     return f'''<section style="background:linear-gradient(135deg,{accent}1a,{accent}08);border:1.5px solid {accent}55;border-radius:16px;padding:26px;margin:34px 0">
 <div style="font-size:13px;font-weight:800;color:{accent};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">{emoji} Tín hiệu VIP{price_line}</div>
 <div style="font-size:18px;line-height:1.5;color:#0f172a;font-weight:700;margin-bottom:8px">{headline}</div>
 <p style="color:#475569;font-size:14px;line-height:1.6;margin-bottom:18px">{sub}</p>
 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
 <a href="/upgrade?plan=pro_monthly" style="padding:13px 24px;background:{accent};color:#fff;border-radius:8px;text-decoration:none;font-weight:800;font-size:15px;display:inline-block">{btn} →</a>
+{aff_btn}
 <a href="{tg_url}" target="_blank" style="padding:13px 20px;background:#fff;color:{accent};border:2px solid {accent};border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">📱 Kênh Telegram {tg_id}</a>
 </div>
-<div style="font-size:12px;color:#94a3b8;margin-top:12px">Chỉ từ 99.000đ/tháng · Huỷ bất kỳ lúc nào · Thanh toán tự động qua PayOS / chuyển khoản</div>
+<div style="font-size:12px;color:#94a3b8;margin-top:12px">Chỉ 299.000đ/tháng (hoặc 2.499k/năm) · Huỷ bất kỳ lúc nào · Thanh toán tự động qua PayOS / chuyển khoản</div>
 </section>'''
 
 
@@ -20957,8 +21304,8 @@ def render_pricing_page() -> str:
         tg_id = '@vnstockio'
 
     canonical = "https://vnstock.io.vn/pricing"
-    title = "Pricing — Vnstock AI | Phân tích chứng khoán miễn phí + Pro 99k/tháng"
-    desc = "So sánh các gói Vnstock AI: Free (miễn phí mãi), Pro (99k/tháng), Premium (199k/tháng). 25+ chỉ báo, AI signals, portfolio backtest, alerts realtime."
+    title = "Bảng giá — Vnstock AI | Miễn phí + Premium 299k/tháng"
+    desc = "Vnstock AI: gói Free (miễn phí mãi) + Premium 299k/tháng (hoặc 2.499k/năm). AI Analyst không giới hạn, 25 chỉ báo, AI signals, portfolio backtest, alerts realtime."
 
     import json as _j
     # Product schema for rich snippets
@@ -20971,9 +21318,7 @@ def render_pricing_page() -> str:
         "offers": [
             {"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "VND",
              "url": canonical, "availability": "https://schema.org/InStock"},
-            {"@type": "Offer", "name": "Pro", "price": "99000", "priceCurrency": "VND",
-             "url": canonical, "availability": "https://schema.org/InStock"},
-            {"@type": "Offer", "name": "Premium", "price": "199000", "priceCurrency": "VND",
+            {"@type": "Offer", "name": "Premium", "price": "299000", "priceCurrency": "VND",
              "url": canonical, "availability": "https://schema.org/InStock"},
         ],
         "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.8", "ratingCount": "127"},
@@ -20982,18 +21327,16 @@ def render_pricing_page() -> str:
     faqs = [
         {"q": "Vnstock AI có thật sự miễn phí không?",
          "a": "Có. Gói Free hoàn toàn miễn phí, không có thời hạn dùng thử. Bạn có thể sử dụng toàn bộ phân tích 25 chỉ báo, realtime data, screener cơ bản, và watchlist 10 mã. Vĩnh viễn."},
-        {"q": "Pro 99k/tháng được gì thêm?",
-         "a": "Pro mở: watchlist không giới hạn, AI alerts qua Telegram + email, portfolio backtest 5 năm, export Excel, API access cho cá nhân (1000 req/ngày). Phù hợp trader hoạt động hằng ngày."},
-        {"q": "Premium 199k/tháng có khác biệt gì?",
-         "a": "Premium bao gồm tất cả Pro + AI insights nâng cao (RAG với LLM Claude), sector rotation signal, smart money tracking đầy đủ, priority support, API 10,000 req/ngày, multi-account portfolio."},
-        {"q": "Có thanh toán tháng/năm không?",
-         "a": "Pro: 99k/tháng hoặc 990k/năm (save 17%). Premium: 199k/tháng hoặc 1,990k/năm (save 17%). Annual có 60 ngày refund nếu không hài lòng."},
+        {"q": "Premium 299k/tháng được gì?",
+         "a": "Premium mở khóa: AI Analyst hỏi đáp không giới hạn, watchlist không giới hạn, AI alerts realtime qua Telegram + email, RAG AI insights (Claude), portfolio backtest 5 năm, smart money tracking đầy đủ, screener nâng cao, API 10,000 req/ngày, priority support."},
+        {"q": "Có thanh toán theo năm không?",
+         "a": "Có. Premium: 299k/tháng hoặc 2.499k/năm (~208k/tháng, tiết kiệm ~30%). Gói năm có 60 ngày hoàn tiền nếu không hài lòng."},
         {"q": "Phương thức thanh toán?",
          "a": "MoMo, ZaloPay, Bank transfer (Vietcombank, Techcombank, MBBank). Sắp có VNPay + Stripe cho khách quốc tế."},
         {"q": "Có hoàn tiền không?",
          "a": "Có. 30 ngày money-back cho gói tháng đầu, 60 ngày cho annual. Không hỏi lý do. Email contact@vnstock.io.vn để yêu cầu."},
         {"q": "Dữ liệu có chính xác không?",
-         "a": "Realtime data từ TCBS WebSocket (cùng nguồn các CTCK lớn). Indicators tính theo công thức chuẩn quốc tế (TradingView-compatible). Backtest 5 năm dữ liệu lịch sử HOSE/HNX/UPCOM."},
+         "a": "Realtime data từ TCBS WebSocket (cùng nguồn các CTCK lớn). Indicators tính theo công thức chuẩn quốc tế (TradingView-compatible). Backtest công khai trên VN30 (~2.4 năm dữ liệu thật) — số liệu tại /methodology."},
         {"q": "Có miễn phí mãi không nếu chỉ dùng Free?",
          "a": "Có. Gói Free không có thời hạn, không giới hạn user, không quảng cáo. Chúng tôi dùng Pro/Premium để bù chi phí server."},
     ]
@@ -21032,41 +21375,23 @@ def render_pricing_page() -> str:
             ],
         },
         {
-            'name': 'Pro', 'price': '99,000', 'period': 'VNĐ / tháng',
-            'tagline': '⭐ Phổ biến nhất — Trader hằng ngày',
-            'color': '#2563eb', 'cta': 'Nâng cấp Pro', 'cta_url': '/app?upgrade=pro',
+            'name': 'Premium', 'price': '299,000', 'period': 'VNĐ / tháng',
+            'tagline': '🚀 Đầy đủ tính năng — Nhà đầu tư chuyên nghiệp',
+            'color': '#a855f7', 'cta': 'Nâng cấp Premium', 'cta_url': '/upgrade?plan=pro_monthly',
             'highlight': True,
             'features': [
                 '✅ <strong>Tất cả tính năng Free</strong>',
                 '✅ Watchlist <strong>không giới hạn</strong>',
+                '✅ <strong>AI Analyst KHÔNG GIỚI HẠN</strong> — hỏi đáp đầu tư ngôn ngữ tự nhiên',
                 '✅ AI alerts realtime qua Telegram + Email',
-                '✅ Portfolio backtest 5 năm dữ liệu',
-                '✅ Export Excel/CSV',
-                '✅ Screener nâng cao (30+ criteria)',
-                '✅ API access 1,000 requests/ngày',
-                '✅ Foreign flow + Smart money cơ bản',
-                '✅ Priority email support (24h)',
-                '✅ Annual discount 17% (990k/năm)',
-                '❌ RAG AI insights (Claude/GPT-4)',
-            ],
-        },
-        {
-            'name': 'Premium', 'price': '199,000', 'period': 'VNĐ / tháng',
-            'tagline': '🚀 Professional + AI Quant',
-            'color': '#a855f7', 'cta': 'Lên Premium', 'cta_url': '/app?upgrade=premium',
-            'highlight': False,
-            'features': [
-                '✅ <strong>Tất cả tính năng Pro</strong>',
-                '✅ <strong>RAG AI insights</strong> (Claude 3.5 Sonnet)',
-                '✅ Sector rotation signal (advanced)',
-                '✅ Smart money tracking đầy đủ',
-                '✅ Multi-account portfolio',
-                '✅ API access 10,000 requests/ngày',
-                '✅ Custom alert rules (10+ conditions)',
-                '✅ Webhook integration',
-                '✅ White-label widget cho website cá nhân',
-                '✅ Priority chat support (1h response)',
-                '✅ Annual: 1,990k/năm (save 17%)',
+                '✅ <strong>RAG AI insights</strong> + Portfolio backtest 5 năm',
+                '✅ Smart money tracking + Foreign flow đầy đủ',
+                '✅ Screener nâng cao (30+ criteria) + Export Excel/CSV',
+                '✅ Sector rotation signal + Multi-account portfolio',
+                '✅ API access 10,000 requests/ngày + Webhook',
+                '✅ Custom alert rules + White-label widget',
+                '✅ Priority support (1h response)',
+                '✅ <strong>Gói năm: chỉ 2,499k/năm</strong> (~208k/tháng, tiết kiệm ~30%)',
             ],
         },
     ]
@@ -22308,7 +22633,7 @@ def render_ssr_stock_page(symbol: str) -> str:
         {"q": f"Vnstock phân tích {sym} có miễn phí không?",
          "a": f"Có, Vnstock cung cấp phân tích kỹ thuật {sym} hoàn toàn miễn phí với realtime data từ TCBS, AI signals, 25+ indicators, backtest, watchlist. Truy cập app tại vnstock.io.vn/app — không cần đăng ký, không quảng cáo, không bán dữ liệu."},
         {"q": f"Phân tích {sym} có chính xác không?",
-         "a": f"Hệ thống AI của Vnstock đạt độ chính xác 65-72% trên backtest 5 năm dữ liệu thị trường VN. Tuy nhiên không có hệ thống nào dự đoán 100% — luôn kết hợp với phân tích cơ bản, quản lý rủi ro (stop loss 2%/lệnh), và đa dạng hóa danh mục."},
+         "a": f"Backtest VN30 công khai (~2.4 năm) của Vnstock: win rate ~36.5%, R:R 1:2.87, kỳ vọng dương +0.41R/lệnh (chi tiết tại /methodology). Tuy nhiên không có hệ thống nào dự đoán 100% — luôn kết hợp với phân tích cơ bản, quản lý rủi ro (stop loss 2%/lệnh), và đa dạng hóa danh mục."},
     ]
 
     faq_html = '<section><h2>❓ Câu hỏi thường gặp về cổ phiếu ' + sym + '</h2>'
@@ -22411,7 +22736,7 @@ footer{{text-align:center;padding:32px;font-size:11px;color:var(--sub);border-to
 {_internal_link_html('stock', sym)}
 <div class="cta">
 <h2>Xem phân tích chi tiết {sym}</h2>
-<p style="color:var(--sub);margin:8px 0 16px">Biểu đồ nến, 25 chỉ báo, backtest, screener — Free mãi mãi · <a href="/pricing" style="color:#5b9dff;font-weight:700">Xem Pro 99k/tháng →</a></p>
+<p style="color:var(--sub);margin:8px 0 16px">Biểu đồ nến, 25 chỉ báo, backtest, screener — Free mãi mãi · <a href="/pricing" style="color:#5b9dff;font-weight:700">Xem Premium 299k/tháng →</a></p>
 <a href="/app">🚀 Mở ứng dụng miễn phí</a>
 </div>
 </div>
@@ -25489,12 +25814,12 @@ _BEST_OF_PAGES = {
         'symbols': [],
         'criteria': 'VN coverage + Realtime + Multi-indicator AI + Backtest + Free tier + Accuracy',
         'sections': [
-            ('Vnstock AI Signals', '✅ AI tự động phân tích 15+ indicators (RSI, MACD, Bollinger, ADX, Stochastic, OBV, Ichimoku, Fibonacci...). ✅ Score 0-10 + signal (BUY/SELL/HOLD). ✅ Realtime updates. ✅ 100% free. ✅ Backtest accuracy 65-72% trên 5 năm data VN.'),
+            ('Vnstock AI Signals', '✅ AI tự động phân tích 15+ indicators (RSI, MACD, Bollinger, ADX, Stochastic, OBV, Ichimoku, Fibonacci...). ✅ Score /25 + signal (BUY/BUY_WARN/NEUTRAL/SELL). ✅ Realtime updates. ✅ Có gói Free. ✅ Backtest VN30 công khai (~2.4 năm), số liệu thật tại /methodology.'),
             ('ChatGPT-4 / Claude', '✅ Phân tích định tính tốt. ✅ Tổng hợp news + earnings. ❌ Không realtime data (mặc dù web search có thể). ❌ Không quantitative analysis chuyên sâu. Phù hợp research, không phù hợp signals.'),
             ('Smart Beta Funds (Mirae, VCBS)', '✅ AI-driven ETF strategies. ✅ Quant rebalancing. ❌ Phí 1-2%/năm. ❌ Performance only marginally better than VN30 ETF.'),
             ('Vnstock vs ChatGPT — khi nào dùng?', 'Vnstock: realtime signals + quantitative screening + automation. ChatGPT: định tính analysis + earnings interpretation + market commentary. Best practice: dùng cả 2 combo.'),
             ('AI có thay thế human trader?', 'Chưa. AI tốt cho: pattern recognition, screening, alerts, backtesting. AI yếu cho: black swan events, sentiment extreme, regime changes. Human + AI = winning combo.'),
-            ('Accuracy comparison', 'Vnstock AI signals: 65-72% accuracy backtest 2020-2025 VN data. ChatGPT-4: hard to measure quantitatively. Random: 50%. Trading firms institutional: 55-60%. AI tốt — nhưng không 100%.'),
+            ('Accuracy comparison', 'Vnstock AI: backtest VN30 công khai (~2.4 năm) — win rate 36.5%, R:R 1:2.87, Profit Factor 1.58, kỳ vọng +0.41R/lệnh (chi tiết tại /methodology). ChatGPT-4: khó đo định lượng. Không công cụ nào đúng 100% — luôn quản trị rủi ro vốn.'),
         ],
         'related': ['stock-screener-vietnam', 'trading-platform-vietnam'],
     },
@@ -28802,8 +29127,8 @@ def render_about_page():
         "🏢 Về Vnstock.io.vn",
         [
             ("Sứ mệnh", "<p>Vnstock.io.vn là nền tảng phân tích chứng khoán AI miễn phí cho nhà đầu tư Việt Nam. Chúng tôi tin rằng công cụ phân tích kỹ thuật cao cấp — vốn chỉ dành cho hedge funds — nên phải <strong>miễn phí + dễ dùng</strong> cho mọi retail trader Việt Nam.</p>"),
-            ("Câu chuyện", "<p>Khởi đầu từ 2024 như side project của 1 nhà phát triển Việt Nam — sau khi thấy retail trader VN phải dùng tools tiếng Anh đắt đỏ (TradingView Pro $14.95/tháng) hoặc dùng tools Việt thiếu tính năng. Vnstock được build để giải quyết đúng vấn đề này.</p><p>Đến 2026: 50,000+ traders đang dùng Vnstock hàng ngày, miễn phí 100%, không quảng cáo bám đuổi.</p>"),
-            ("Sản phẩm cốt lõi", '<ul style="padding-left:24px"><li><strong>AI Analysis</strong>: Auto-analyze 25+ indicators cho mỗi mã, score 0-10 + signal BUY/SELL/HOLD</li><li><strong>Realtime Data</strong>: TCBS WebSocket — VN30, HOSE, HNX, UPCOM</li><li><strong>Screener</strong>: 20+ preset filters + custom criteria</li><li><strong>Backtest</strong>: 5 năm data, AFL script community</li><li><strong>PWA</strong>: Cài như app trên iOS/Android không qua App Store</li><li><strong>Calculators</strong>: 10 tools cho position sizing, R:R, compound interest, ...</li><li><strong>Content</strong>: 230+ blog posts + 23 sector deep-dives + 13 beginner guides</li></ul>'),
+            ("Câu chuyện", "<p>Khởi đầu từ 2024 như side project của 1 nhà phát triển Việt Nam — sau khi thấy retail trader VN phải dùng tools tiếng Anh đắt đỏ (TradingView Pro $14.95/tháng) hoặc dùng tools Việt thiếu tính năng. Vnstock được build để giải quyết đúng vấn đề này.</p><p>Đến 2026: Vnstock phục vụ cộng đồng nhà đầu tư cá nhân Việt Nam — miễn phí, minh bạch (xem backtest công khai tại /methodology), không quảng cáo bám đuổi.</p>"),
+            ("Sản phẩm cốt lõi", '<ul style="padding-left:24px"><li><strong>AI Analysis</strong>: Auto-analyze 25+ indicators cho mỗi mã, score /25 + signal BUY/SELL</li><li><strong>Realtime Data</strong>: TCBS WebSocket — VN30, HOSE, HNX, UPCOM</li><li><strong>Screener</strong>: 20+ preset filters + custom criteria</li><li><strong>Backtest</strong>: walk-forward + AFL script community</li><li><strong>PWA</strong>: Cài như app trên iOS/Android không qua App Store</li><li><strong>Calculators</strong>: 10 tools cho position sizing, R:R, compound interest, ...</li><li><strong>Content</strong>: 230+ blog posts + 23 sector deep-dives + 13 beginner guides</li></ul>'),
             ("Triết lý", '<p>1) <strong>Miễn phí mãi mãi</strong>: Free tier không bao giờ thay đổi.</p><p>2) <strong>Vietnam-first</strong>: Tiếng Việt mặc định, dữ liệu VN realtime, hỗ trợ tiếng Việt 24/7.</p><p>3) <strong>Không bán data cá nhân</strong>: Privacy first — không tracking quảng cáo, không sell to third parties.</p><p>4) <strong>Open methodology</strong>: AI signals + scoring methodology công khai trong <a href="/blog/">blog posts</a>. Không black-box.</p>'),
             ("Số liệu hôm nay", f'<ul style="padding-left:24px"><li><strong>50,000+</strong> active users monthly</li><li><strong>{370}</strong> stocks covered (VN30, HNX, UPCOM)</li><li><strong>25+</strong> technical indicators</li><li><strong>820+</strong> indexed SEO pages</li><li><strong>10</strong> free calculator tools</li><li><strong>230+</strong> blog posts</li><li><strong>100%</strong> miễn phí</li></ul>'),
             ("Liên hệ", '<p>📧 Email: <a href="mailto:contact@vnstock.io.vn">contact@vnstock.io.vn</a><br>🌐 Website: <a href="https://vnstock.io.vn">vnstock.io.vn</a><br>📱 App: <a href="/app">vnstock.io.vn/app</a><br>📰 Blog: <a href="/blog">vnstock.io.vn/blog</a></p>'),
@@ -28838,7 +29163,7 @@ def render_terms_page():
         [
             ("1. Chấp nhận điều khoản", '<p>Bằng cách truy cập hoặc sử dụng Vnstock.io.vn (\"Dịch vụ\"), bạn đồng ý tuân thủ các điều khoản này. Nếu không đồng ý, vui lòng không sử dụng.</p>'),
             ("2. ⚠️ KHÔNG PHẢI KHUYẾN NGHỊ ĐẦU TƯ", '<p style="background:#3a1018;padding:14px;border-radius:8px;border-left:3px solid #f03050;color:#fff"><strong>QUAN TRỌNG</strong>: Nội dung trên Vnstock.io.vn (AI signals, scores, phân tích, recommendations, blog) <strong>KHÔNG PHẢI</strong> khuyến nghị đầu tư cá nhân. Chỉ là <strong>thông tin tham khảo</strong> dựa trên phân tích kỹ thuật + dữ liệu công khai.</p><p>Quyết định đầu tư là <strong>trách nhiệm cá nhân</strong> của bạn. Cân nhắc tình hình tài chính + tham khảo cố vấn tài chính có chứng chỉ trước khi giao dịch.</p>'),
-            ("3. Rủi ro đầu tư chứng khoán", '<p>Đầu tư chứng khoán có <strong>rủi ro mất vốn</strong>. Past performance KHÔNG đảm bảo future returns. AI signals có thể sai. Hệ thống chúng tôi đạt 65-72% backtest accuracy — không phải 100%.</p><p>Một số rủi ro: market crash (-30%+), individual stock bankruptcy, currency risk, regulatory changes, black swan events.</p>'),
+            ("3. Rủi ro đầu tư chứng khoán", '<p>Đầu tư chứng khoán có <strong>rủi ro mất vốn</strong>. Past performance KHÔNG đảm bảo future returns. AI signals có thể sai. Backtest VN30 công khai (~2.4 năm) cho win rate ~36.5% với R:R cao — KHÔNG phải 100%.</p><p>Một số rủi ro: market crash (-30%+), individual stock bankruptcy, currency risk, regulatory changes, black swan events.</p>'),
             ("4. Sử dụng được phép", '<ul style="padding-left:24px"><li>Truy cập + sử dụng cá nhân.</li><li>Share blog posts với attribution (link về vnstock.io.vn).</li><li>Embed calculator tools (qua &lt;script src="/api/embed/widget.js"&gt;).</li><li>Sử dụng cho mục đích nghiên cứu cá nhân.</li></ul>'),
             ("5. Không được phép", '<ul style="padding-left:24px"><li>Scraping data hàng loạt (rate limit + IP block).</li><li>Reverse engineering AI algorithms.</li><li>Tạo nhiều tài khoản để vượt limit.</li><li>Sử dụng cho mục đích lừa đảo hoặc phi pháp.</li><li>Resell data hoặc tools.</li><li>Sử dụng tài khoản người khác.</li></ul>'),
             ("6. Sở hữu trí tuệ", '<p>Code, design, content, AI models của Vnstock thuộc sở hữu Vnstock.io.vn. Blog posts được protect by copyright Vietnam law.</p><p>Bạn được sử dụng theo Terms — không được sao chép + redistribute thương mại không phép.</p>'),
@@ -28894,7 +29219,7 @@ def render_editorial_policy():
             ("Sứ mệnh editorial", '<p>Vnstock.io.vn cam kết cung cấp <strong>thông tin chính xác, khách quan, cập nhật</strong> về thị trường chứng khoán Việt Nam. Quy trình biên tập tuân thủ chuẩn quốc tế (Reuters, Bloomberg, Financial Times).</p>'),
             ("Quy trình vet content (3 layers)", '<p><strong>Layer 1 — Data verification</strong>: Mọi số liệu từ TCBS WebSocket (realtime), HOSE/HNX/UPCOM official reports, BCTC quý/năm từ các công ty niêm yết. Cross-check với 2+ sources independent (VnDirect, SSI, Bloomberg).</p><p><strong>Layer 2 — Fact-check</strong>: Mỗi blog post được fact-check bởi senior editor trước khi publish. Claims về performance, percentages, dates phải có source link.</p><p><strong>Layer 3 — Disclaimer review</strong>: Pháp lý review để đảm bảo content không vi phạm Luật Chứng khoán hoặc misleading. Risk warnings được mandatory cho mọi guide/strategy content.</p>'),
             ("Sources chính (Tier 1)", '<p>Phần lớn data đến từ:</p><ul style="padding-left:24px;line-height:1.8"><li><strong>TCBS</strong> — Realtime WebSocket cho VN30/HOSE/HNX/UPCOM (đối tác chính thức)</li><li><strong>HOSE/HNX/UPCOM</strong> — Official statements, công bố thông tin</li><li><strong>NHNN</strong> — Macro data, lãi suất, FX rates</li><li><strong>Tổng cục Thống kê</strong> — GDP, CPI, FDI data</li><li><strong>Bloomberg/Reuters</strong> — International data, comparisons</li><li><strong>MSCI</strong> — Index reviews, classifications</li><li><strong>Vietstock/CafeF/NDH</strong> — News verification (corroboration only)</li></ul>'),
-            ("AI content disclosure", '<p>Vnstock AI signals được generate bởi ensemble 25+ technical indicators + machine learning models (LSTM, Random Forest). <strong>QUAN TRỌNG</strong>: AI signals KHÔNG PHẢI khuyến nghị đầu tư cá nhân. Backtest accuracy 65-72% (5 năm VN data). Xem chi tiết tại <a href="/methodology">Methodology</a>.</p><p>Blog posts và guides được editor viết bởi đội ngũ Vnstock (Vietnamese-first content), không phải AI-generated full. AI có thể được dùng cho draft + research, nhưng final editing + fact-check do human.</p>'),
+            ("AI content disclosure", '<p>Vnstock AI signals được generate bởi ensemble 25+ technical indicators + machine learning models (LSTM, Random Forest). <strong>QUAN TRỌNG</strong>: AI signals KHÔNG PHẢI khuyến nghị đầu tư cá nhân. Backtest VN30 ~2.4 năm: win rate ~36.5%, kỳ vọng dương (số thật). Xem chi tiết tại <a href="/methodology">Methodology</a>.</p><p>Blog posts và guides được editor viết bởi đội ngũ Vnstock (Vietnamese-first content), không phải AI-generated full. AI có thể được dùng cho draft + research, nhưng final editing + fact-check do human.</p>'),
             ("Conflict of interest", '<p>Vnstock KHÔNG có affiliate partnership với bất kỳ công ty chứng khoán nào (SSI, VPS, TCBS, ...). Editorial team không hold positions trong stocks discussed trong articles (24h cooldown rule). Sponsored content (nếu có trong tương lai) sẽ được labeled rõ ràng.</p>'),
             ("Update cycle", '<p>Blog posts được review + update mỗi 3-6 tháng (quarterly). Guide pages: annual review. Stock pages: realtime data (every 5 phút). Sector deep-dive: bi-annual review (June + December). Macro outlook: updated khi có MSCI rebalance hoặc Fed decision.</p>'),
             ("Corrections", '<p>Nếu phát hiện sai sót: <a href="mailto:corrections@vnstock.io.vn">corrections@vnstock.io.vn</a>. Mọi correction sẽ được public trong <a href="/changelog">changelog</a> với timestamp.</p>'),
@@ -28905,17 +29230,40 @@ def render_editorial_policy():
 
 
 def render_methodology():
+    _bt = _load_vn30_backtest()
+    if _bt and _bt.get('n_stocks', 0) > 0:
+        _rows_html = ''.join(
+            f'<tr><td style="padding:8px;border-bottom:1px solid #1e2d47">{m}</td><td style="padding:8px;border-bottom:1px solid #1e2d47"><strong>{v}</strong></td></tr>'
+            for m, v in [
+                ('Số mã VN30 test', _bt['n_stocks']),
+                ('Khoảng dữ liệu thật', f"~{_bt.get('years', 0)} năm"),
+                ('Tổng số lệnh', f"{_bt.get('total_trades', 0):,}"),
+                ('Win Rate (TB có trọng số)', f"{_bt.get('win_rate', 0)}%"),
+                ('Avg R:R', f"1:{_bt.get('avg_rr', 0)}"),
+                ('Profit Factor', _bt.get('profit_factor', 0)),
+                ('Expectancy / lệnh', f"{_bt.get('expectancy_r', 0)}R"),
+                ('Max Drawdown (TB/mã)', f"{_bt.get('avg_max_drawdown', 0)}%"),
+                ('Max Drawdown (tệ nhất)', f"{_bt.get('worst_max_drawdown', 0)}%"),
+                ('Lợi nhuận TB/mã', f"{_bt.get('avg_return_pct', 0)}%"),
+            ])
+        _bt_section = ("📊 Backtest THẬT — VN30 (cập nhật " + _bt.get('updated', '') + ")",
+            '<p style="background:#064e3b;color:#a7f3d0;padding:10px 12px;border-radius:8px;font-size:13px"><strong>✅ Số liệu THẬT</strong> — chạy chính backtest engine của Vnstock trên <strong>' + str(_bt['n_stocks']) + ' mã VN30</strong>, dữ liệu ~' + str(_bt.get('years', 0)) + ' năm. Tái lập được cho từng mã bằng <a href="/app" style="color:#6ee7b7">công cụ Backtest trong app</a>.</p>'
+            + '<table style="width:100%;border-collapse:collapse;margin:12px 0"><tr style="background:#0a0d13"><th style="padding:8px;border-bottom:1px solid #1e2d47;text-align:left">Chỉ số</th><th style="padding:8px;border-bottom:1px solid #1e2d47;text-align:left">Giá trị</th></tr>' + _rows_html + '</table>'
+            + '<p style="color:#9fb3d0;font-size:13px">⚠️ <strong>Hiệu suất quá khứ ≠ tương lai</strong>. Backtest có hạn chế cố hữu (survivor bias — chỉ mã đang niêm yết; slippage; phí). Giao dịch thực thường thấp hơn backtest 20-30%. Phần lớn dữ liệu là giai đoạn tăng — thị trường giảm có thể kém hơn.</p>')
+    else:
+        _bt_section = ("Backtest (chưa chạy số thật)",
+            '<p style="background:#7c2d12;color:#fed7aa;padding:10px 12px;border-radius:8px;font-size:13px"><strong>⚠️ Chưa chạy backtest thật.</strong> Admin gọi <code>POST /api/admin/backtest-vn30</code> để sinh số liệu THẬT, tái lập được. Trong lúc chờ, dùng <a href="/app" style="color:#fbbf24">công cụ Backtest trong app</a> để xem kết quả từng mã.</p>')
     return _trust_page_html(
         "Methodology — Cách AI Algorithm Hoạt Động | Vnstock",
         "🔬 Methodology — Vnstock AI",
         [
             ("Transparency Statement", '<p>Vnstock.io.vn cam kết <strong>transparency 100%</strong> về cách AI algorithm hoạt động. Không black-box. Mỗi signal có explanation chi tiết. Đây là tài liệu kỹ thuật chính thức.</p>'),
-            ("AI Score 0-10 — Cách Tính", '<p>AI Score là weighted average của <strong>25+ technical indicators</strong>, mỗi indicator có weight được calibrated qua backtest 5 năm VN30 data.</p><p><strong>Indicators bao gồm</strong>:</p><ul style="padding-left:24px;line-height:1.7"><li><strong>Trend</strong>: MA20/50/200, EMA, MACD, Parabolic SAR, ADX</li><li><strong>Momentum</strong>: RSI(14), Stochastic, CCI, Williams %R, ROC</li><li><strong>Volatility</strong>: Bollinger Bands, ATR, Keltner Channel, Squeeze</li><li><strong>Volume</strong>: OBV, MFI, VWAP, Volume profile</li><li><strong>Patterns</strong>: Heikin Ashi, Candlestick patterns, Donchian Channel</li><li><strong>Advanced</strong>: Ichimoku, Fibonacci retracement, SuperTrend</li></ul>'),
-            ("Signal Generation (BUY/SELL/HOLD)", '<p>Signal thresholds:</p><ul style="padding-left:24px;line-height:1.8"><li><strong>STRONG_BUY</strong>: Score ≥ 8.5 + ADX > 25 + Volume confirm</li><li><strong>BUY</strong>: Score 7.0-8.5</li><li><strong>HOLD</strong>: Score 4.0-7.0</li><li><strong>SELL</strong>: Score 2.5-4.0</li><li><strong>STRONG_SELL</strong>: Score &lt; 2.5 + downtrend confirm</li></ul><p>Confidence multiplier: ADX > 25 (trend mạnh) → boost signal strength. Volume spike → confirm signal.</p>'),
-            ("Backtest Results (5 năm VN30)", '<p><strong>Period</strong>: 2020-2025 (5 năm). <strong>Universe</strong>: VN30 stocks. <strong>Frequency</strong>: Daily signals.</p><table style="width:100%;border-collapse:collapse;margin:12px 0"><tr style="background:#0a0d13"><th style="padding:8px;border-bottom:1px solid #1e2d47;text-align:left">Metric</th><th style="padding:8px;border-bottom:1px solid #1e2d47;text-align:left">Value</th></tr><tr><td style="padding:8px;border-bottom:1px solid #1e2d47">Total Trades</td><td style="padding:8px;border-bottom:1px solid #1e2d47">~3,200</td></tr><tr><td style="padding:8px;border-bottom:1px solid #1e2d47">Win Rate</td><td style="padding:8px;border-bottom:1px solid #1e2d47">68.4%</td></tr><tr><td style="padding:8px;border-bottom:1px solid #1e2d47">Avg R:R</td><td style="padding:8px;border-bottom:1px solid #1e2d47">1:1.8</td></tr><tr><td style="padding:8px;border-bottom:1px solid #1e2d47">Sharpe Ratio</td><td style="padding:8px;border-bottom:1px solid #1e2d47">1.42</td></tr><tr><td style="padding:8px;border-bottom:1px solid #1e2d47">Max Drawdown</td><td style="padding:8px;border-bottom:1px solid #1e2d47">-12.8%</td></tr><tr><td style="padding:8px;border-bottom:1px solid #1e2d47">CAGR</td><td style="padding:8px;border-bottom:1px solid #1e2d47">+22.4%</td></tr></table><p style="color:#9fb3d0;font-size:13px">⚠️ <strong>Past performance ≠ future results</strong>. Backtest có inherent limitations (look-ahead bias, survivor bias, slippage assumptions). Live trading thường underperform backtest 20-30%.</p>'),
-            ("Limitations & Known Biases", '<p><strong>1) Look-ahead bias</strong>: Mitigated bằng out-of-sample testing (30% data reserved cho final validation).</p><p><strong>2) Survivor bias</strong>: Universe chỉ VN30 hiện tại — không tính companies bị delisted. Real-world impact: limited (VN30 ít delisting).</p><p><strong>3) Slippage</strong>: Assume 0.15% slippage round-trip. Reality: 0.20-0.35% với mid-cap, lower với VN30 blue-chips.</p><p><strong>4) Market regime change</strong>: Model trained 2020-2025 (mostly bull market). Performance bear market có thể degrade. Cần periodic re-calibration.</p><p><strong>5) Black swan events</strong>: COVID 2020 crash, Trump tariff 2018 — AI struggle với unprecedented events. Always combine with fundamental + macro awareness.</p>'),
-            ("Sector Rotation Algorithm", '<p>Vnstock track <strong>sector momentum</strong> qua relative strength vs VN-Index. Top sectors có RS &gt; 1.0 trong 3-month rolling window được flagged. <strong>Use case</strong>: Allocate more to leading sectors, reduce lagging.</p><p>Methodology: <strong>Sector RS = Avg(stock returns trong sector) / VN-Index return</strong>. Smoothed bằng EMA(20).</p>'),
-            ("Foreign Flow Indicator", '<p>Daily foreign net buy/sell aggregated qua TCBS data. Signal: <strong>Net buy ≥ $30M/day cho 5 ngày liên tục</strong> = institutional bullish signal. Backtest correlation với 30-day forward returns: <strong>+0.35</strong> (statistically significant).</p>'),
+            ("Điểm tổng hợp (Score /25) — Cách Tính", '<p>Score là <strong>TỔNG điểm cộng/trừ</strong> từ <strong>25 chỉ báo kỹ thuật</strong>: mỗi chỉ báo +điểm khi tín hiệu tăng, −điểm khi giảm; thang hiển thị tối đa <strong>/25</strong>. 6 chỉ báo <strong>CORE</strong> (RSI, MACD, Bollinger, MA, ADX, Ichimoku) phải đồng thuận để xác nhận tín hiệu mạnh; 4 nhóm bỏ phiếu → <strong>Confluence "X/4 nhóm đồng thuận"</strong>.</p><p><strong>Indicators bao gồm</strong>:</p><ul style="padding-left:24px;line-height:1.7"><li><strong>Trend</strong>: MA20/50/200, EMA, MACD, Parabolic SAR, ADX</li><li><strong>Momentum</strong>: RSI(14), Stochastic, CCI, Williams %R, ROC</li><li><strong>Volatility</strong>: Bollinger Bands, ATR, Keltner Channel, Squeeze</li><li><strong>Volume</strong>: OBV, MFI, VWAP, Volume profile</li><li><strong>Patterns</strong>: Heikin Ashi, Candlestick patterns, Donchian Channel</li><li><strong>Advanced</strong>: Ichimoku, Fibonacci retracement, SuperTrend</li></ul>'),
+            ("Sinh tín hiệu (BUY/SELL) — ngưỡng THẬT", '<p>Phân loại theo Score (thang /25) + điều kiện đồng thuận core:</p><ul style="padding-left:24px;line-height:1.8"><li><strong>🟢 BUY</strong>: Score ≥ <strong>+10</strong> VÀ ≥ 3/6 chỉ báo core tăng</li><li><strong>🟡 BUY_WARN</strong> (cảnh báo mua): Score ≥ <strong>+8</strong></li><li><strong>BUY_WEAK</strong>: Score ≥ <strong>+4</strong></li><li><strong>NEUTRAL</strong>: từ <strong>−4 đến +4</strong></li><li><strong>SELL_WEAK / SELL_WARN / 🔴 SELL</strong>: ≤ <strong>−4</strong> / ≤ <strong>−8</strong> / ≤ <strong>−10</strong> (+ ≥3 core giảm)</li></ul><p>Mã thanh khoản thấp (&lt; 200.000 cp/phiên VN, &lt; 500.000 US) bị gắn nhãn <strong>_LOWVOL</strong> cảnh báo rủi ro khó khớp lệnh.</p>'),
+            _bt_section,
+            ("Limitations & Known Biases", '<p><strong>1) Look-ahead bias</strong>: Engine dùng walk-forward 60/20/20 — 20% dữ liệu cuối là out-of-sample; tín hiệu được tính TRƯỚC khi nến mở cửa (không nhìn tương lai).</p><p><strong>2) Survivor bias</strong>: Universe chỉ VN30 hiện tại — không tính companies bị delisted. Real-world impact: limited (VN30 ít delisting).</p><p><strong>3) Slippage</strong>: Mô hình giả định slippage 0.2%/lượt (VN) + phí giao dịch ~0.15%/lượt. Mid-cap thực tế có thể cao hơn; VN30 blue-chip thấp hơn.</p><p><strong>4) Market regime change</strong>: Backtest hiện chạy trên <strong>~2.4 năm dữ liệu gần đây</strong> (chủ yếu thị trường tăng) — KHÔNG phải 5 năm. Hiệu suất thị trường giảm mạnh có thể kém hơn. Số tự cập nhật khi DB tích thêm lịch sử.</p><p><strong>5) Black swan events</strong>: Sự kiện chưa từng có (sốc vĩ mô, tin bất ngờ) nằm NGOÀI khả năng của phân tích kỹ thuật thuần — và thường ngoài cửa sổ dữ liệu backtest. Luôn kết hợp phân tích cơ bản + bối cảnh vĩ mô.</p>'),
+            ("Sector Rotation Algorithm", '<p>Vnstock track <strong>sector momentum</strong> qua relative strength vs VN-Index. Top sectors có RS &gt; 1.0 trong 3-month rolling window được flagged. <strong>Use case</strong>: Allocate more to leading sectors, reduce lagging.</p><p>Cách tính: mỗi ngành lấy trung bình <strong>relative strength (RS) + điểm tổng hợp + mức đồng thuận tín hiệu</strong> của các mã thành phần. RS cao + nhiều mã BUY = ngành đang dẫn dắt.</p>'),
+            ("Foreign Flow Indicator", '<p>Daily foreign net buy/sell aggregated qua TCBS data. Khối ngoại mua ròng mạnh nhiều phiên liên tục thường là tín hiệu dòng tiền tổ chức tích cực. Đây là chỉ báo dòng tiền tham khảo, nên kết hợp với tín hiệu kỹ thuật + cơ bản (chưa công bố thống kê tương quan được kiểm chứng).</p>'),
             ("Code + Audit", '<p>Vnstock không open-source full algorithm (competitive moat) nhưng các indicators công thức đều chuẩn — public domain. Methodology document này được updated quarterly. Last update: ' + time.strftime('%Y-%m-%d') + '.</p><p>Questions về methodology: <a href="mailto:methodology@vnstock.io.vn">methodology@vnstock.io.vn</a>.</p>'),
         ],
         "methodology"
@@ -30181,10 +30529,10 @@ _ensure_payments_table()
 
 # Plans config — single source of truth
 PLANS = {
-    'pro_monthly':    {'amount': 99000,  'months': 1,  'name': 'Pro Monthly', 'tier': 'pro'},
-    'pro_yearly':     {'amount': 990000, 'months': 12, 'name': 'Pro Yearly (save 17%)', 'tier': 'pro'},
-    'premium_monthly':{'amount': 199000, 'months': 1,  'name': 'Premium Monthly', 'tier': 'premium'},
-    'premium_yearly': {'amount': 1990000,'months': 12, 'name': 'Premium Yearly (save 17%)', 'tier': 'premium'},
+    'pro_monthly':    {'amount': 299000,  'months': 1,  'name': 'Premium 1 tháng', 'tier': 'premium'},
+    'pro_yearly':     {'amount': 2499000, 'months': 12, 'name': 'Premium 1 năm (tiết kiệm ~30%)', 'tier': 'premium'},
+    'premium_monthly':{'amount': 299000,  'months': 1,  'name': 'Premium 1 tháng', 'tier': 'premium'},
+    'premium_yearly': {'amount': 2499000, 'months': 12, 'name': 'Premium 1 năm (tiết kiệm ~30%)', 'tier': 'premium'},
 }
 
 
@@ -30315,9 +30663,10 @@ def vietqr_url(plan_id: str, email: str, txn_ref: str) -> dict:
     VietQR free (no API key needed), works với 40+ ngân hàng VN."""
     plan = PLANS.get(plan_id)
     if not plan: return {}
-    bank_bin = get_setting('payment_bank_bin', '970436')  # default: VCB
-    bank_account = get_setting('payment_bank_account', '')
-    bank_name = get_setting('payment_bank_name', 'Vnstock')
+    bank_bin     = get_setting('payment_bank_bin',     '970422')          # MSB BIN
+    bank_account = get_setting('payment_bank_account', '3320031982')      # STK MSB mặc định
+    bank_name    = get_setting('payment_bank_name',    'MSB - Maritime Bank')
+    bank_owner   = get_setting('payment_bank_owner',   'bùithanh vũ')
 
     if not bank_account:
         return {
@@ -30327,13 +30676,14 @@ def vietqr_url(plan_id: str, email: str, txn_ref: str) -> dict:
     note = f"VNS {txn_ref}"  # Short ref để user nhập nhanh
     from urllib.parse import quote as _q
     qr_url = (f"https://img.vietqr.io/image/{bank_bin}-{bank_account}-compact2.jpg"
-              f"?amount={plan['amount']}&addInfo={_q(note)}&accountName={_q(bank_name)}")
+              f"?amount={plan['amount']}&addInfo={_q(note)}&accountName={_q(bank_owner)}")
     return {
         'configured': True,
         'qr_url': qr_url,
         'bank_bin': bank_bin,
         'bank_account': bank_account,
         'bank_name': bank_name,
+        'bank_owner': bank_owner,
         'amount': plan['amount'],
         'addInfo': note,
         'instruction': f'Chuyển khoản qua app ngân hàng đến tài khoản {bank_account} ({bank_name}), số tiền {plan["amount"]:,} VNĐ, nội dung: {note}',
@@ -30363,9 +30713,14 @@ def render_upgrade_page(plan_id: str = 'pro_monthly', email: str = '') -> str:
     plan = PLANS.get(plan_id) or PLANS['pro_monthly']
     canonical = "https://vnstock.io.vn/upgrade"
 
-    # Plan selector tabs
+    # Plan selector tabs — dedupe theo (months, amount) để không hiện gói trùng
     plan_tabs = ''
+    _seen_plans = set()
     for pid, p in PLANS.items():
+        _key = (p.get('months'), p.get('amount'))
+        if _key in _seen_plans:
+            continue  # bỏ qua slug trùng giá/thời hạn (vd premium_monthly trùng pro_monthly)
+        _seen_plans.add(_key)
         active = ' style="background:#2563eb;color:#fff"' if pid == plan_id else ''
         plan_tabs += f'<a href="?plan={pid}&email={email}" style="padding:8px 14px;border:1px solid #334155;border-radius:8px;text-decoration:none;color:#9fb3d0;font-size:13px"{active}>{p["name"]} · {p["amount"]:,}đ</a>'
 
@@ -30433,11 +30788,50 @@ h1{{font-size:28px;text-align:center;margin-bottom:8px}}
 <div class="notice">
 <strong>⏱️ Kích hoạt</strong>: Sau khi chuyển khoản, admin sẽ confirm trong 1-24h. Bạn sẽ nhận email confirmation. Kiểm tra trạng thái tại <a href="/account?email={email}" style="color:#fbbf24">/account</a>.
 </div>
-<div style="background:#0e1320;border:1px solid #1e2d47;border-radius:10px;padding:18px;margin:20px 0;text-align:center">
-<div style="font-size:13px;color:#9fb3d0;margin-bottom:10px">💳 Đã có tài khoản? Thanh toán tự động qua PayOS:</div>
-<a href="/app" style="display:inline-block;padding:10px 20px;background:transparent;border:1px solid #5b9dff;color:#5b9dff;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">Đăng nhập → Pay với PayOS →</a>
-<div style="font-size:11px;color:#4a6180;margin-top:8px">PayOS: tự động kích hoạt ngay, không cần chờ admin</div>
+<!-- ── PayOS 1-click: tự động kích hoạt, không chờ admin ── -->
+<div style="background:linear-gradient(135deg,#0f2040,#0e1320);border:1.5px solid #2563eb;border-radius:14px;padding:22px;margin:20px 0;text-align:center">
+  <div style="font-size:13px;color:#93c5fd;margin-bottom:6px;font-weight:600">⚡ Thanh toán tức thì — kích hoạt ngay</div>
+  <div style="font-size:11px;color:#4a6180;margin-bottom:14px">Hỗ trợ: MoMo · ZaloPay · ATM · Thẻ Visa/Master (qua PayOS)</div>
+  <button id="payos-btn"
+    onclick="doPayOS('{plan_id}')"
+    style="display:inline-block;padding:14px 32px;background:linear-gradient(90deg,#2563eb,#7c3aed);color:#fff;border:0;border-radius:10px;font-weight:800;font-size:16px;cursor:pointer;letter-spacing:.3px;box-shadow:0 4px 20px rgba(37,99,235,.4)">
+    💳 Thanh toán ngay — {plan['amount']:,}đ
+  </button>
+  <div style="font-size:11px;color:#4a6180;margin-top:10px">✅ Tự động kích hoạt · Không chờ admin · Huỷ bất kỳ lúc nào</div>
 </div>
+<script>
+function doPayOS(planId) {{
+  var btn = document.getElementById('payos-btn');
+  btn.textContent = '⏳ Đang tạo link thanh toán...';
+  btn.disabled = true;
+  var token = localStorage.getItem('auth_token') || '';
+  if (!token) {{
+    // Chưa đăng nhập → redirect về app với redirect_to upgrade
+    window.location.href = '/app?redirect=/upgrade?plan=' + planId;
+    return;
+  }}
+  fetch('/api/payment/payos/create', {{
+    method: 'POST',
+    headers: {{'Content-Type':'application/json','Authorization':'Bearer '+token}},
+    body: JSON.stringify({{plan_id: planId}})
+  }})
+  .then(function(r){{return r.json();}})
+  .then(function(d){{
+    if (d.checkout_url) {{
+      window.location.href = d.checkout_url;
+    }} else if (d.error) {{
+      btn.textContent = '💳 Thanh toán ngay — {plan['amount']:,}đ';
+      btn.disabled = false;
+      alert('Lỗi: ' + d.error + '\\n\\nVui lòng dùng chuyển khoản QR bên dưới hoặc liên hệ hỗ trợ.');
+    }}
+  }})
+  .catch(function(){{
+    btn.textContent = '💳 Thanh toán ngay — {plan['amount']:,}đ';
+    btn.disabled = false;
+    alert('Không kết nối được. Vui lòng thử lại hoặc dùng QR chuyển khoản bên dưới.');
+  }});
+}}
+</script>
 <div style="background:#0e1320;padding:18px;border-radius:10px;font-size:13px;color:#9fb3d0;line-height:1.8">
 <strong style="color:#e2edff">Cần hỗ trợ?</strong><br>
 📧 contact@vnstock.io.vn<br>
@@ -30761,6 +31155,24 @@ def is_pro_user(email: str = '', user_id: int = 0) -> dict:
                     except Exception: pass
         except Exception as e:
             log.debug(f"[is_pro_user] PayOS: {e}")
+    # ── Fallback: check users.plan + plan_expires (trial, monthly từ DB) ──
+    if user_id:
+        try:
+            with get_db() as c:
+                u = c.execute("SELECT plan, plan_expires, plan_forever, role FROM users WHERE id=?",
+                              (user_id,)).fetchone()
+            if u:
+                if u['role'] == 'admin' or u['plan_forever']:
+                    return {'is_pro': True, 'tier': 'admin', 'method': 'db', 'paid_until': None}
+                if u['plan'] and u['plan'] not in ('free', None) and u['plan_expires']:
+                    from datetime import datetime as _dtt
+                    exp = _dtt.fromisoformat(u['plan_expires'][:19])
+                    if exp > _dtt.now():
+                        tier = 'trial' if u['plan'] == 'trial' else 'pro'
+                        return {'is_pro': True, 'tier': tier, 'method': 'db',
+                                'paid_until': u['plan_expires'][:10]}
+        except Exception as _e:
+            log.debug(f"[is_pro_user] DB fallback: {_e}")
     return result
 
 
@@ -31183,8 +31595,20 @@ def scan_signals_and_post_telegram(min_score: int = 18, max_posts: int = 3) -> d
         state = _load_json_file(state_file, {})
     except: state = {}
     now_ts = int(time.time())
-    # Cleanup state older than 24h
-    state = {k: v for k, v in state.items() if now_ts - v < 86400}
+    _DAY = 86400
+    _COOLDOWN = 5 * _DAY  # mỗi mã chỉ được post lại sau 5 ngày (chống lặp gây phiền)
+    today = time.strftime('%Y-%m-%d')
+    yday = time.strftime('%Y-%m-%d', time.localtime(now_ts - _DAY))
+    # Cleanup: key 'sig:' theo cooldown 5 ngày; counter '_count_' giữ hôm nay + hôm qua
+    state = {k: v for k, v in state.items()
+             if (k.startswith('sig:') and isinstance(v, (int, float)) and now_ts - v < _COOLDOWN)
+             or (k.startswith('_count_') and k >= f'_count_{yday}')}
+    # 🚦 Cap số tín hiệu/ngày — CHẤT LƯỢNG hơn số lượng (chỉnh qua setting signal_daily_cap)
+    daily_cap = int(get_setting('signal_daily_cap', '3') or 3)
+    posted_today = int(state.get(f'_count_{today}', 0) or 0)
+    slots = max(0, daily_cap - posted_today)
+    if slots <= 0:
+        return {'ok': True, 'posted': [], 'reason': 'daily_cap_reached', 'cap': daily_cap}
 
     candidates = []
     for sym, entry in _ram_cache.items():
@@ -31197,29 +31621,22 @@ def scan_signals_and_post_telegram(min_score: int = 18, max_posts: int = 3) -> d
         rsi = float(a.get('rsi', 50) or 50)
         chg = float(d.get('chg', 0) or 0)
 
-        # Strong signals only
-        triggers = []
-        if score >= min_score and signal in ['STRONG_BUY', 'BUY']:
-            triggers.append(f'Score {score}/25 ({signal})')
-        if rsi < 30 and signal not in ['SELL', 'STRONG_SELL']:
-            triggers.append(f'RSI {rsi:.1f} (oversold)')
-        if rsi > 75 and chg > 3:
-            triggers.append(f'RSI {rsi:.1f} (overbought) — chốt lời?')
-        if chg > 5 and score >= 15:
-            triggers.append(f'Tăng {chg:.1f}% volume mạnh')
-
-        if not triggers: continue
-        # Dedupe — không post cùng symbol trong 24h
-        dedupe_key = f"{sym}:{signal}"
+        # CHỈ tín hiệu MUA chất lượng cao — bỏ noise (RSI/chg đơn lẻ, cảnh báo "chốt lời" gây nhiễu)
+        if score < min_score: continue
+        if signal not in ('STRONG_BUY', 'BUY'): continue
+        if not (45 <= rsi <= 72): continue   # đà tăng khỏe, chưa quá mua/quá bán
+        if chg > 6: continue                  # đã tăng mạnh trong phiên → tránh đu đỉnh FOMO
+        # Cooldown 5 ngày/mã (không post lại cùng mã liên tục)
+        dedupe_key = f"sig:{sym}"
         if state.get(dedupe_key): continue
-
+        triggers = [f'Score {score}/25 ({signal})', f'RSI {rsi:.1f} — đà tăng khỏe']
         candidates.append({'sym': sym, 'name': d.get('name', sym)[:40], 'price': d.get('price', 0),
                            'chg': chg, 'score': score, 'signal': signal, 'rsi': rsi,
                            'triggers': triggers, 'dedupe': dedupe_key})
 
     # Sort by score, take top N
     candidates.sort(key=lambda x: x['score'], reverse=True)
-    for c in candidates[:max_posts]:
+    for c in candidates[:min(max_posts, slots)]:
         sym = c['sym']
         sig_emoji = '🟢' if c['signal'] in ['STRONG_BUY', 'BUY'] else '🔴' if c['signal'] in ['SELL', 'STRONG_SELL'] else '🟡'
         chg_str = f"+{c['chg']:.2f}%" if c['chg'] >= 0 else f"{c['chg']:.2f}%"
@@ -31249,8 +31666,10 @@ def scan_signals_and_post_telegram(min_score: int = 18, max_posts: int = 3) -> d
             r = resp.json() if resp.status_code == 200 else None
             if r and r.get('ok'):
                 state[c['dedupe']] = now_ts
+                posted_today += 1
+                state[f'_count_{today}'] = posted_today
                 posted.append({'sym': sym, 'signal': c['signal']})
-                log.info(f"[signal_bot] Posted {sym} {c['signal']} → Telegram")
+                log.info(f"[signal_bot] Posted {sym} {c['signal']} → Telegram (hôm nay {posted_today}/{daily_cap})")
             else:
                 log.warning(f"[signal_bot] Failed {sym}: {resp.status_code} {resp.text[:120]}")
             time.sleep(2)
@@ -31263,6 +31682,477 @@ def scan_signals_and_post_telegram(min_score: int = 18, max_posts: int = 3) -> d
     return {'ok': True, 'posted': posted, 'candidates_count': len(candidates)}
 
 
+# ════════════════════════════════════════════════════════════════════
+# 🧠 AI ANALYST — Hiểu ngôn ngữ tự nhiên của nhà đầu tư chuyên nghiệp
+# Câu hỏi → phát hiện ý định → lấy ĐÚNG dữ liệu (kỹ thuật + định giá) → LLM trả lời.
+# ════════════════════════════════════════════════════════════════════
+_AI_EXCL_SYM = {'VNINDEX', 'VN30', 'VN30INDEX', 'HNX', 'HNXINDEX', 'UPCOM', 'UPCOMINDEX', 'VN100', 'VN30F1M'}
+
+_FUND_SCAN = {}        # sym -> fundamentals dict (cho scanner value/growth/dividend)
+_FUND_SCAN_TS = 0
+
+
+def _enrich_fundamentals_scan(max_stocks: int = 120):
+    """Background: nạp P/E, P/B, ROE, dividend_yield cho top mã thanh khoản
+    → cho phép AI Analyst trả lời câu hỏi value/growth/cổ tức. Cache qua _fetch_fundamentals (6h)."""
+    global _FUND_SCAN, _FUND_SCAN_TS
+    try:
+        uni = []
+        for sym, e in list(_ram_cache.items()):
+            if sym in _AI_EXCL_SYM:
+                continue
+            d = e.get('data', {}) if isinstance(e, dict) else {}
+            if not d or d.get('market') != 'VN' or not d.get('price'):
+                continue
+            uni.append((sym, (d.get('vol', 0) or 0) * (d.get('price', 0) or 0)))
+        uni.sort(key=lambda x: -x[1])
+        out = dict(_FUND_SCAN)
+        for sym, _ in uni[:max_stocks]:
+            try:
+                fd = _fetch_fundamentals(sym)
+                if fd and (fd.get('pe') or fd.get('roe') or fd.get('dividend_yield') is not None):
+                    out[sym] = fd
+            except Exception:
+                pass
+            time.sleep(0.25)  # tránh hammer vnstock API
+        _FUND_SCAN = out
+        _FUND_SCAN_TS = time.time()
+        log.info(f"[ai_analyst] Fundamentals scan cache: {len(out)} mã")
+    except Exception as e:
+        log.warning(f"[ai_analyst] enrich error: {e}")
+
+
+# Bộ từ khóa → ý định (tiếng Việt có/không dấu + English)
+_INTENT_KEYWORDS = {
+    'value':      ['giá trị', 'gia tri', 'cổ phiếu rẻ', 'co phieu re', 'định giá thấp', 'dinh gia thap',
+                   'undervalued', 'p/e thấp', 'pe thấp', 'p/b thấp', 'pb thấp', 'value', 'định giá hấp dẫn',
+                   'bị định giá thấp', 'giá hời', 'giá hợp lý', 'rẻ so với'],
+    'growth':     ['tăng trưởng', 'tang truong', 'growth', 'doanh thu tăng', 'lợi nhuận tăng', 'eps tăng',
+                   'tiềm năng tăng trưởng', 'roe cao', 'tăng trưởng cao'],
+    'dividend':   ['cổ tức', 'co tuc', 'dividend', 'tỷ suất cổ tức', 'yield', 'thu nhập thụ động',
+                   'cổ tức cao', 'trả cổ tức', 'chia cổ tức'],
+    'momentum':   ['đang tăng', 'dang tang', 'sắp tăng', 'sap tang', 'chuẩn bị tăng', 'chuan bi tang',
+                   'breakout', 'vượt đỉnh', 'vuot dinh', 'momentum', 'đang chạy', 'dang chay', 'sóng',
+                   'bứt phá', 'but pha', 'tăng giá', 'đột phá', 'tăng mạnh', 'dẫn sóng', 'sắp chạy'],
+    'oversold':   ['quá bán', 'qua ban', 'bắt đáy', 'bat day', 'giảm sâu', 'giam sau', 'rsi thấp',
+                   'oversold', 'tạo đáy', 'bán quá mức', 'rơi sâu', 'chiết khấu sâu', 'về đáy'],
+    'shark':      ['cá mập', 'ca map', 'dòng tiền lớn', 'dong tien lon', 'smart money', 'tổ chức mua',
+                   'khối ngoại', 'khoi ngoai', 'gom hàng', 'gom', 'tay to', 'tự doanh', 'dòng tiền'],
+    'buy_signal': ['tín hiệu mua', 'tin hieu mua', 'nên mua', 'nen mua', 'mua gì', 'mua gi', 'mua mã nào',
+                   'khuyến nghị mua', 'đáng mua', 'top mua', 'mua mạnh', 'cổ phiếu tốt', 'mã tốt'],
+    'sell_signal':['nên bán', 'nen ban', 'tín hiệu bán', 'thoát hàng', 'cắt lỗ', 'nên tránh', 'cảnh báo bán', 'rủi ro cao'],
+    'safe':       ['an toàn', 'an toan', 'blue chip', 'bluechip', 'ít rủi ro', 'phòng thủ', 'phong thu',
+                   'vốn hóa lớn', 'von hoa lon', 'large cap', 'ổn định', 'bền vững', 'vn30', 'cho người mới'],
+}
+
+_SECTOR_KW = {
+    'Ngân hàng': ['ngân hàng', 'ngan hang', 'nhóm bank', ' bank'],
+    'Thép': ['thép', 'thep', 'steel', 'ngành tôn'],
+    'Bất động sản': ['bất động sản', 'bat dong san', 'bđs', ' bds', 'real estate', 'địa ốc', 'dia oc'],
+    'Chứng khoán': ['chứng khoán', 'chung khoan', 'securities', 'nhóm ck', 'công ty ck'],
+    'Công nghệ': ['công nghệ', 'cong nghe', 'technology', ' tech', 'phần mềm'],
+    'Dầu khí': ['dầu khí', 'dau khi', 'oil', ' gas', 'xăng dầu', 'họ p'],
+    'Bán lẻ': ['bán lẻ', 'ban le', 'retail'],
+    'Y tế / Dược': ['dược', 'duoc', 'y tế', 'pharma', 'ngành thuốc'],
+    'Tiện ích (điện, nước, khí)': ['ngành điện', 'thủy điện', 'nhiệt điện', 'năng lượng', 'utilities'],
+    'Thực phẩm & Đồ uống': ['thực phẩm', 'thuc pham', 'đồ uống', ' food', 'ngành sữa', ' bia'],
+}
+
+
+def _detect_intents(q: str) -> dict:
+    """Phân tích câu hỏi NĐT → ý định + ngành + mã + vốn. Trái tim của NL understanding."""
+    import re as _re
+    ql = ' ' + (q or '').lower() + ' '
+    intents = [tag for tag, kws in _INTENT_KEYWORDS.items() if any(k in ql for k in kws)]
+    sectors = [sec for sec, kws in _SECTOR_KW.items() if any(k in ql for k in kws)]
+    syms = []
+    for m in _re.findall(r'\b([A-Za-z]{3,4})\b', q or ''):
+        u = m.upper()
+        if u in _ram_cache and u not in _AI_EXCL_SYM:
+            syms.append(u)
+    capital = None
+    mc = _re.search(r'(\d+(?:[.,]\d+)?)\s*(tỷ|ty|triệu|trieu|tr|củ|cu)\b', ql)
+    if mc:
+        v = float(mc.group(1).replace(',', '.')); unit = mc.group(2)
+        capital = v * (1e9 if unit in ('tỷ', 'ty') else 1e6)
+    is_compare = any(k in ql for k in ['so sánh', 'so sanh', ' vs ', ' với ', ' hay ', 'cái nào', 'cai nao', 'tốt hơn'])
+    is_market = any(k in ql for k in ['thị trường', 'thi truong', 'vnindex', 'vn-index', 'vn index', 'toàn thị trường'])
+    return {'intents': intents, 'sectors': sectors, 'symbols': list(dict.fromkeys(syms)),
+            'capital': capital, 'compare': is_compare, 'market': is_market}
+
+
+def _vn_universe_rows():
+    rows = []
+    for sym, e in list(_ram_cache.items()):
+        if sym in _AI_EXCL_SYM:
+            continue
+        d = e.get('data', {}) if isinstance(e, dict) else {}
+        if not d or d.get('market') != 'VN' or not d.get('price'):
+            continue
+        rows.append((sym, d, d.get('analysis', {}) or {}, _FUND_SCAN.get(sym, {})))
+    return rows
+
+
+def _sector_match(d, f, sectors):
+    if not sectors:
+        return True
+    s = str(f.get('sector') or d.get('sector') or '').lower()
+    if not s or s == 'n/a':
+        return False
+    return any(sec.lower()[:6] in s for sec in sectors)
+
+
+def _scan_by_intent(intent: str, sectors=None, limit: int = 8):
+    """Lọc + xếp hạng mã theo 1 ý định. Kỹ thuật từ _ram_cache, định giá từ _FUND_SCAN."""
+    def num(f, k):
+        v = f.get(k)
+        return v if isinstance(v, (int, float)) else None
+    out = []
+    for sym, d, a, f in _vn_universe_rows():
+        if not _sector_match(d, f, sectors):
+            continue
+        pe, pb, roe, dy = num(f, 'pe'), num(f, 'pb'), num(f, 'roe'), num(f, 'dividend_yield')
+        mc = num(f, 'market_cap') or 0
+        chg = d.get('chg', 0) or 0
+        rsi = a.get('rsi', 50) or 50
+        score = a.get('total', 0) or 0
+        sig = a.get('signal', 'NEUTRAL')
+        price = d.get('price', 0) or 0
+        ma20 = a.get('ma20', price) or price
+        sf = a.get('shark_flow', {}) or {}
+        keep, rank = False, 0
+        if intent == 'value':
+            if pe and 0 < pe < 15 and (pb is None or pb < 2.5):
+                keep, rank = True, -pe
+        elif intent == 'growth':
+            if roe and roe > 0.15 and price >= ma20:
+                keep, rank = True, roe
+        elif intent == 'dividend':
+            if dy and dy > 0.03:
+                keep, rank = True, dy
+        elif intent == 'momentum':
+            if chg > 0 and price >= ma20 and 50 <= rsi <= 72:
+                keep, rank = True, score + chg
+        elif intent == 'oversold':
+            if 0 < rsi < 35:
+                keep, rank = True, -rsi
+        elif intent == 'shark':
+            # Cá mập gom THẬT: streak ≥3 phiên + điểm kỹ thuật không yếu (≥10) → loại mã rác
+            if sf.get('streak_dir') == 1 and sf.get('streak', 0) >= 3 and score >= 10:
+                keep, rank = True, sf.get('streak', 0) * 100 + score
+        elif intent == 'buy_signal':
+            if sig in ('STRONG_BUY', 'BUY', 'BUY_WARN'):
+                keep, rank = True, score
+        elif intent == 'sell_signal':
+            if sig in ('SELL', 'STRONG_SELL'):
+                keep, rank = True, score
+        elif intent == 'safe':
+            if mc >= 2e13 and sig not in ('SELL', 'STRONG_SELL'):
+                keep, rank = True, mc
+        if keep:
+            out.append((sym, d, a, f, rank))
+    out.sort(key=lambda x: x[4] or 0, reverse=True)
+    return out[:limit]
+
+
+_INTENT_LABEL = {
+    'value': 'CỔ PHIẾU GIÁ TRỊ (P/E thấp, định giá rẻ)',
+    'growth': 'CỔ PHIẾU TĂNG TRƯỞNG (ROE cao, trên MA20)',
+    'dividend': 'CỔ PHIẾU CỔ TỨC CAO',
+    'momentum': 'CỔ PHIẾU ĐANG TĂNG / MOMENTUM (đà tăng + score cao)',
+    'oversold': 'CỔ PHIẾU QUÁ BÁN (cơ hội bắt đáy)',
+    'shark': 'CỔ PHIẾU CÁ MẬP ĐANG GOM',
+    'buy_signal': 'TÍN HIỆU MUA MẠNH (25 chỉ báo)',
+    'sell_signal': 'CẢNH BÁO BÁN / RỦI RO',
+    'safe': 'CỔ PHIẾU AN TOÀN (blue-chip vốn hóa lớn)',
+}
+
+
+def _fmt_rows(rows):
+    lines = []
+    for sym, d, a, f, _r in rows:
+        pe, roe, dy = f.get('pe'), f.get('roe'), f.get('dividend_yield')
+        parts = [f"giá {d.get('price', 0):,.0f}", f"{d.get('chg', 0):+.1f}%",
+                 f"score {a.get('total', 0)}/25", a.get('signal', '')]
+        if isinstance(pe, (int, float)) and pe > 0: parts.append(f"P/E {pe:.1f}")
+        if isinstance(roe, (int, float)): parts.append(f"ROE {roe*100:.1f}%")
+        if isinstance(dy, (int, float)) and dy > 0: parts.append(f"cổ tức {dy*100:.1f}%")
+        sec = f.get('sector') or d.get('sector') or ''
+        sec = '' if str(sec).lower() in ('', 'n/a') else f" [{sec}]"
+        lines.append(f"- {sym}{sec}: " + ", ".join(parts))
+    return "\n".join(lines)
+
+
+def _build_invest_context(question: str):
+    """Trái tim RAG mới: hiểu ý định → lấy đúng data → context giàu cho LLM."""
+    # Lazy: nạp fundamentals trong nền nếu cache trống/cũ (>20h) — không block câu trả lời
+    if (not _FUND_SCAN) or (time.time() - _FUND_SCAN_TS > 72000):
+        try:
+            import threading as _th
+            if not getattr(_build_invest_context, '_enriching', False):
+                _build_invest_context._enriching = True
+                def _bg():
+                    try: _enrich_fundamentals_scan()
+                    finally: _build_invest_context._enriching = False
+                _th.Thread(target=_bg, daemon=True, name='fund-enrich').start()
+        except Exception:
+            pass
+    det = _detect_intents(question)
+    intents, sectors, syms = det['intents'], det['sectors'], det['symbols']
+    blocks, sources, handled = [], [], set()
+
+    # Combo đặc biệt: "cổ phiếu giá trị đang/chuẩn bị tăng" = value ∩ momentum
+    if 'value' in intents and 'momentum' in intents:
+        val = _scan_by_intent('value', sectors, 40)
+        val_syms = {r[0] for r in val}
+        mom = _scan_by_intent('momentum', sectors, 50)
+        combo = [r for r in mom if r[0] in val_syms][:8]
+        if combo:
+            blocks.append("🎯 CỔ PHIẾU GIÁ TRỊ ĐANG TĂNG GIÁ (định giá rẻ + đà tăng tích cực):\n" + _fmt_rows(combo))
+            sources += [r[0] for r in combo[:3]]
+            handled.update(['value', 'momentum'])
+
+    for it in intents:
+        if it in handled:
+            continue
+        rows = _scan_by_intent(it, sectors, 8)
+        if rows:
+            blocks.append(f"{_INTENT_LABEL.get(it, it.upper())}:\n" + _fmt_rows(rows))
+            sources += [r[0] for r in rows[:2]]
+
+    # Mã cụ thể được hỏi → phân tích chi tiết
+    for sym in syms[:3]:
+        e = _ram_cache.get(sym, {}); d = e.get('data', {}) if isinstance(e, dict) else {}
+        a = d.get('analysis', {}) or {}
+        if not d.get('price'):
+            continue
+        f = _FUND_SCAN.get(sym) or {}
+        if not f:
+            try: f = _fetch_fundamentals(sym) or {}
+            except Exception: f = {}
+        line = (f"PHÂN TÍCH {sym}: giá {d.get('price', 0):,.0f} ({d.get('chg', 0):+.1f}%), "
+                f"score {a.get('total', 0)}/25, tín hiệu {a.get('signal', '')}, RSI {a.get('rsi', 50):.0f}")
+        if isinstance(f.get('pe'), (int, float)) and f['pe'] > 0:
+            line += f", P/E {f['pe']:.1f}, P/B {f.get('pb', 0):.1f}, ROE {(f.get('roe') or 0)*100:.1f}%"
+        if f.get('target_price'):
+            line += f", giá mục tiêu {f['target_price']:,.0f} ({f.get('rating', '')})"
+        blocks.append(line); sources.append(sym)
+
+    # Ngành cụ thể nhưng không rõ ý định → top tín hiệu tốt trong ngành
+    if sectors and not intents and not syms:
+        rows = _scan_by_intent('buy_signal', sectors, 8)
+        if rows:
+            blocks.append(f"CỔ PHIẾU NGÀNH {', '.join(sectors)} CÓ TÍN HIỆU TỐT:\n" + _fmt_rows(rows))
+            sources += [r[0] for r in rows[:3]]
+
+    # Fallback: không bắt được ý định cụ thể → top tín hiệu mua + cổ tức (đa dạng)
+    if not blocks:
+        buy = _scan_by_intent('buy_signal', None, 8)
+        blocks.append("TOP CỔ PHIẾU TÍN HIỆU MUA (theo 25 chỉ báo kỹ thuật):\n" + _fmt_rows(buy))
+        sources += [r[0] for r in buy[:3]]
+        val = _scan_by_intent('value', None, 5)
+        if val:
+            blocks.append("CỔ PHIẾU ĐỊNH GIÁ RẺ (P/E thấp):\n" + _fmt_rows(val))
+
+    today = time.strftime("%d/%m/%Y")
+    ctx = f"DỮ LIỆU THỊ TRƯỜNG VIỆT NAM HÔM NAY ({today}) — đã lọc sẵn theo ý định câu hỏi:\n\n" + "\n\n".join(blocks)
+    if det.get('capital'):
+        ctx += f"\n\n💰 Vốn đầu tư của người dùng: ~{det['capital']/1e6:,.0f} triệu VNĐ (gợi ý phân bổ phù hợp)."
+    ctx += "\n\n(Lưu ý: data đã được hệ thống lọc đúng tiêu chí. Hãy chọn 3-5 mã phù hợp nhất để tư vấn.)"
+    return ctx, list(dict.fromkeys(sources))[:5], det
+
+
+def _real_client_ip(handler) -> str:
+    """IP THẬT của client sau reverse proxy (nginx set X-Forwarded-For / X-Real-IP).
+    QUAN TRỌNG: nếu dùng handler.client_address[0] sau nginx → luôn là 127.0.0.1 cho
+    MỌI user → quota gộp chung 1 bucket → 'user câu đầu đã báo hết'. Helper này tách đúng từng user."""
+    try:
+        xff = handler.headers.get('X-Forwarded-For', '')
+        if xff:
+            return xff.split(',')[0].strip()
+        xr = handler.headers.get('X-Real-IP', '')
+        if xr:
+            return xr.strip()
+    except Exception:
+        pass
+    try:
+        return handler.client_address[0]
+    except Exception:
+        return '0.0.0.0'
+
+
+def _ai_ask_quota_check(ip: str, email: str = '', is_admin: bool = False, handler=None) -> dict:
+    """Freemium gate SERVER-SIDE (chống bypass localStorage).
+    - Admin / Pro / Premium = KHÔNG giới hạn.
+    - CHƯA bật commercial_mode → MIỄN PHÍ không giới hạn cho TẤT CẢ (giai đoạn growth).
+    - Khi admin đã bật thương mại → Free = N câu/ngày theo IP THẬT (setting ai_free_per_day)."""
+    # 1) Admin luôn không giới hạn (gửi Authorization: Bearer <admin_token>)
+    if is_admin:
+        return {'allowed': True, 'used': 0, 'limit': None, 'is_pro': True, 'unlimited': True}
+    # 2) Pro/Premium không giới hạn
+    try:
+        if email and is_pro_user(email).get('is_pro'):
+            return {'allowed': True, 'used': 0, 'limit': None, 'is_pro': True, 'unlimited': True}
+    except Exception:
+        pass
+    # 2.5) Admin/Pro ĐÃ LOGIN (session) → không giới hạn (không cần token/email)
+    if handler is not None and _session_admin_or_pro(handler):
+        return {'allowed': True, 'used': 0, 'limit': None, 'is_pro': True, 'unlimited': True}
+    # 3) 🚦 CHƯA bật chế độ thương mại → ai cũng hỏi tự do, không tính phí
+    try:
+        if not is_commercial_mode():
+            return {'allowed': True, 'used': 0, 'limit': None, 'is_pro': False, 'unlimited': True}
+    except Exception:
+        return {'allowed': True, 'used': 0, 'limit': None, 'is_pro': False, 'unlimited': True}
+    # 4) Đã bật thương mại → enforce N câu/ngày theo IP thật
+    try:
+        limit = int(get_setting('ai_free_per_day', '2') or 2)
+    except Exception:
+        limit = 2
+    day = time.strftime('%Y-%m-%d')
+    used = 0
+    try:
+        with get_db() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS ai_ask_usage (ip TEXT, day TEXT, n INTEGER, PRIMARY KEY(ip,day))")
+            row = c.execute("SELECT n FROM ai_ask_usage WHERE ip=? AND day=?", (ip, day)).fetchone()
+            used = (row[0] if row else 0) or 0
+    except Exception:
+        pass
+    return {'allowed': used < limit, 'used': used, 'limit': limit, 'is_pro': False, 'unlimited': False}
+
+
+def _ai_ask_quota_inc(ip: str):
+    day = time.strftime('%Y-%m-%d')
+    try:
+        with get_db() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS ai_ask_usage (ip TEXT, day TEXT, n INTEGER, PRIMARY KEY(ip,day))")
+            c.execute("INSERT INTO ai_ask_usage(ip,day,n) VALUES(?,?,1) ON CONFLICT(ip,day) DO UPDATE SET n=n+1", (ip, day))
+    except Exception:
+        pass
+
+
+# ══════════════════════════════════════════════════════════════
+# 💎 PREMIUM FEATURE GATE (dùng chung) — mức "Chặt" (ưu tiên doanh thu)
+# CHƯA bật commercial_mode → TẤT CẢ unlimited (dormant, không đổi gì hiện tại).
+# Admin / Pro / Premium → luôn unlimited. Limit chỉnh được qua settings.
+# ══════════════════════════════════════════════════════════════
+# Watchlist KHÔNG có ở đây: user thường KHÔNG BAO GIỜ được thêm/xóa mã (mãi admin-only).
+_FREE_LIMITS = {
+    'ai_ask':    ('ai_free_per_day',       2),  # câu hỏi AI / ngày (theo IP)
+    'backtest':  ('free_backtest_per_day', 1),  # lần backtest / ngày (theo IP)
+    'paper':     ('free_paper_max',        1),  # số vị thế paper mở cùng lúc (theo tài khoản)
+    'alerts':    ('free_alerts_max',       1),  # số cảnh báo giá (theo tài khoản)
+}
+
+def _feature_limit(feature: str) -> int:
+    key, dflt = _FREE_LIMITS.get(feature, ('', 0))
+    try: return int(get_setting(key, str(dflt)) or dflt)
+    except Exception: return dflt
+
+def _premium_unlimited(email: str = '', is_admin: bool = False) -> bool:
+    """True nếu KHÔNG bị giới hạn: admin / Pro / chưa bật thương mại."""
+    if is_admin: return True
+    try:
+        if email and is_pro_user(email).get('is_pro'): return True
+    except Exception: pass
+    try:
+        return not is_commercial_mode()
+    except Exception:
+        return True  # lỗi → mở (không chặn nhầm user)
+
+def _session_admin_or_pro(handler) -> bool:
+    """CHỈ kiểm tra session đã login là admin/Pro (KHÔNG xét commercial_mode).
+    Dùng cho endpoint public (AI, backtest) để admin/pro đã login được unlimited."""
+    try:
+        u = handler.maybe_auth() if handler else None
+        if not u: return False
+        if u.get('role') == 'admin': return True
+        uid = u.get('id') or u.get('user_id') or 0
+        em = (u.get('email') or '').strip().lower()
+        return bool(is_pro_user(email=em, user_id=uid).get('is_pro'))
+    except Exception:
+        return False
+
+def _premium_unlimited_user(u) -> bool:
+    """Account-based: True nếu user (đã login) KHÔNG bị giới hạn.
+    Chưa bật thương mại → mở cho tất cả. admin / Pro → unlimited.
+    Chưa login + thương mại BẬT → bị gate (coi như free)."""
+    try:
+        if not is_commercial_mode(): return True
+    except Exception:
+        return True
+    if not u: return False
+    if u.get('role') == 'admin': return True
+    try:
+        uid = u.get('id') or u.get('user_id') or 0
+        em = (u.get('email') or '').strip().lower()
+        if is_pro_user(email=em, user_id=uid).get('is_pro'): return True
+    except Exception: pass
+    return False
+
+def _feature_gate_user(feature: str, u, current_count: int) -> dict:
+    """Gate theo TÀI KHOẢN + tổng số đang có (paper / alerts)."""
+    if _premium_unlimited_user(u):
+        return {'allowed': True, 'unlimited': True, 'limit': None, 'used': current_count}
+    limit = _feature_limit(feature)
+    return {'allowed': current_count < limit, 'unlimited': False, 'limit': limit, 'used': current_count}
+
+def _feature_gate_count(feature: str, current_count: int, email: str = '', is_admin: bool = False) -> dict:
+    """Gate theo TỔNG SỐ đang có (watchlist / paper / alerts)."""
+    if _premium_unlimited(email, is_admin):
+        return {'allowed': True, 'unlimited': True, 'limit': None, 'used': current_count}
+    limit = _feature_limit(feature)
+    return {'allowed': current_count < limit, 'unlimited': False, 'limit': limit, 'used': current_count}
+
+def _feature_gate_daily(feature: str, ip: str, email: str = '', is_admin: bool = False, handler=None) -> dict:
+    """Gate theo SỐ LẦN/NGÀY (backtest...) — đếm theo IP thật.
+    Exempt: admin token / pro email / admin+pro đã login (session) / commercial OFF."""
+    if _premium_unlimited(email, is_admin) or (handler is not None and _session_admin_or_pro(handler)):
+        return {'allowed': True, 'unlimited': True, 'limit': None, 'used': 0}
+    limit = _feature_limit(feature)
+    day = time.strftime('%Y-%m-%d')
+    used = 0
+    try:
+        with get_db() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS feature_usage (feat TEXT, ip TEXT, day TEXT, n INTEGER, PRIMARY KEY(feat,ip,day))")
+            row = c.execute("SELECT n FROM feature_usage WHERE feat=? AND ip=? AND day=?", (feature, ip, day)).fetchone()
+            used = (row[0] if row else 0) or 0
+    except Exception: pass
+    return {'allowed': used < limit, 'unlimited': False, 'limit': limit, 'used': used}
+
+def _feature_gate_inc(feature: str, ip: str):
+    day = time.strftime('%Y-%m-%d')
+    try:
+        with get_db() as c:
+            c.execute("CREATE TABLE IF NOT EXISTS feature_usage (feat TEXT, ip TEXT, day TEXT, n INTEGER, PRIMARY KEY(feat,ip,day))")
+            c.execute("INSERT INTO feature_usage(feat,ip,day,n) VALUES(?,?,?,1) ON CONFLICT(feat,ip,day) DO UPDATE SET n=n+1", (feature, ip, day))
+    except Exception: pass
+
+def _upgrade_payload(feature_label: str, gate: dict) -> dict:
+    """Response chuẩn khi vượt giới hạn free → FE hiện CTA nâng cấp."""
+    return {
+        'ok': False, 'limited': True, 'upgrade': True,
+        'error': (f"🔒 {feature_label} đã đạt giới hạn gói Free"
+                  + (f" ({gate.get('limit')})" if gate.get('limit') else '') + ".\n\n"
+                  f"💎 Nâng cấp Premium 299k/tháng để dùng KHÔNG GIỚI HẠN → https://vnstock.io.vn/upgrade"),
+        'upgrade_url': '/upgrade?plan=pro_monthly',
+        'quota': {'used': gate.get('used'), 'limit': gate.get('limit')},
+    }
+
+
+def _premium_only_block(handler, feature_label: str) -> bool:
+    """Tính năng CHỈ dành Premium (advanced backtest, export CSV...).
+    Return True (ĐÃ gửi response upgrade) nếu commercial ON + không phải admin/pro → chặn.
+    Return False nếu cho qua (commercial OFF, hoặc admin/pro đã login)."""
+    try:
+        if not is_commercial_mode(): return False
+    except Exception:
+        return False
+    if _session_admin_or_pro(handler): return False
+    handler.send_json(_upgrade_payload(feature_label, {'limit': None}))
+    return True
+
+
 def ai_chat_answer(question: str, language: str = 'vi') -> dict:
     """AI Stock Assistant — RAG chat ("Tôi có 5000$ nên mua gì?")
     1. Fetch top stocks + market context
@@ -31273,49 +32163,37 @@ def ai_chat_answer(question: str, language: str = 'vi') -> dict:
         return {'ok': False, 'error': 'Câu hỏi quá ngắn'}
     question = question.strip()[:500]
 
-    # Build context from top stocks
-    top_buy = []
-    top_sell = []
-    for sym, entry in _ram_cache.items():
-        d = entry.get('data', {})
-        a = d.get('analysis', {})
-        if not a or not d.get('price'): continue
-        score = a.get('total', 0) or 0
-        sig = a.get('signal', '')
-        if sig in ['STRONG_BUY', 'BUY'] and score >= 15:
-            top_buy.append((sym, score, sig, d.get('chg', 0), d.get('sector', '')))
-        elif sig in ['SELL', 'STRONG_SELL']:
-            top_sell.append((sym, score, sig, d.get('chg', 0)))
-    top_buy.sort(key=lambda x: x[1], reverse=True)
-    top_buy = top_buy[:10]
-    top_sell = top_sell[:5]
-
-    context = "DỮ LIỆU THỊ TRƯỜNG VIỆT NAM HÔM NAY:\n\n"
-    context += "TOP CỔ PHIẾU CÓ TÍN HIỆU MUA (score cao nhất):\n"
-    for s, sc, sg, ch, sect in top_buy:
-        context += f"- {s} (ngành {sect}): Score {sc}/25, {sg}, {ch:+.2f}%\n"
-    context += "\nTOP CỔ PHIẾU NÊN TRÁNH/BÁN:\n"
-    for s, sc, sg, ch in top_sell:
-        context += f"- {s}: {sg}, score {sc}/25, {ch:+.2f}%\n"
+    # 🧠 Hiểu ý định câu hỏi → lấy ĐÚNG dữ liệu (kỹ thuật + định giá)
+    context, _ctx_sources, _det = _build_invest_context(question)
 
     today = time.strftime("%d/%m/%Y")
     if language == 'en':
-        sys_prompt = f"""You are an AI assistant for Vnstock.io.vn — a Vietnam stock platform. Answer based on REAL market data provided below. Today: {today}.
-- Be concise (under 250 words).
-- Reference specific tickers from the data when relevant.
-- Always include disclaimer: this is technical analysis, not investment advice.
-- Suggest user check /stock/<symbol> for real-time data."""
+        sys_prompt = f"""You are a senior Vietnam-stock investment analyst at Vnstock.io.vn (15+ years). Today: {today}.
+The DATA below is PRE-FILTERED to match the user's intent. Pick the 3-5 best-fit tickers and advise.
+- Map intent correctly: "value" = low P/E / undervalued; "rising/about to rise" = positive momentum + high score; "dividend" = high yield; "bottom-fishing" = oversold.
+- For each pick: price, P/E/ROE (if available), signal, ONE concise reason.
+- Be concise (<300 words), use bullets + bold tickers.
+- ALWAYS end with disclaimer: technical signal, not investment advice.
+- Suggest /phan-tich/<TICKER> + /co-tuc/<TICKER> for details."""
     else:
-        sys_prompt = f"""Bạn là trợ lý AI Vnstock.io.vn — nền tảng phân tích chứng khoán Việt Nam. Trả lời dựa trên DỮ LIỆU THỊ TRƯỜNG THỰC tế cung cấp dưới đây. Hôm nay: {today}.
+        sys_prompt = f"""Bạn là CHUYÊN GIA PHÂN TÍCH ĐẦU TƯ chứng khoán Việt Nam của Vnstock.io.vn, 15 năm kinh nghiệm, tư vấn như một fund manager chuyên nghiệp. Hôm nay: {today}.
+
+DỮ LIỆU bên dưới ĐÃ ĐƯỢC HỆ THỐNG LỌC SẴN đúng theo ý định câu hỏi của nhà đầu tư. Nhiệm vụ của bạn: chọn 3-5 mã PHÙ HỢP NHẤT và tư vấn sắc bén, có căn cứ.
+
+⛔ TUYỆT ĐỐI KHÔNG BỊA SỐ: Chỉ dùng đúng con số (giá, P/E, ROE, cổ tức, score, tín hiệu) CÓ SẴN trong phần DỮ LIỆU bên dưới. Nếu một chỉ số KHÔNG xuất hiện trong data → ghi "đang cập nhật", TUYỆT ĐỐI không tự đoán/bịa con số. Ví dụ: nếu data không ghi tỷ suất cổ tức của một mã thì KHÔNG được nói "cổ tức 8%".
+⛔ CHỈ đề xuất các mã CÓ trong danh sách đã lọc bên dưới. KHÔNG được thêm mã từ trí nhớ/kiến thức riêng của bạn (vì chúng có thể không khớp dữ liệu thực tế hôm nay).
 
 Quy tắc:
-- Trả lời <250 từ, súc tích.
-- Nêu cụ thể mã cổ phiếu từ data khi liên quan (vd: VCB, FPT).
-- Bao gồm điểm score + tín hiệu khi giới thiệu mã.
-- LUÔN có disclaimer: đây là tín hiệu kỹ thuật, không phải khuyến nghị đầu tư.
-- Gợi ý user xem /stock/<MÃ> hoặc /phan-tich/<MÃ> cho phân tích chi tiết."""
+- HIỂU ĐÚNG Ý ĐỊNH: "cổ phiếu giá trị" = P/E thấp, định giá rẻ; "đang/chuẩn bị tăng" = momentum + score cao; "cổ tức" = tỷ suất cao; "bắt đáy" = quá bán; "an toàn" = blue-chip vốn hóa lớn; "cá mập gom" = dòng tiền lớn.
+- Mỗi mã đề xuất nêu: giá, P/E hoặc ROE (nếu có TRONG DATA), tín hiệu, và 1 câu LÝ DO chọn (kết hợp định giá + kỹ thuật).
+- Nếu user cho biết VỐN → gợi ý phân bổ tỷ trọng hợp lý (vd 3-5 mã, không all-in).
+- Nếu câu hỏi mơ hồ → vẫn đưa gợi ý theo data, hỏi lại ngắn nếu cần.
+- Súc tích <300 từ, format đẹp: bullet, **in đậm mã**.
+- ⚠️ TRẢ LỜI HOÀN TOÀN BẰNG TIẾNG VIỆT — kể cả câu disclaimer. TUYỆT ĐỐI không dùng tiếng Anh/Đức/ngôn ngữ khác.
+- LUÔN kết bằng disclaimer (tiếng Việt): "Đây là phân tích kỹ thuật/định giá tham khảo, không phải khuyến nghị đầu tư."
+- Gợi ý xem /phan-tich/<MÃ> và /co-tuc/<MÃ> để biết chi tiết."""
 
-    user_prompt = f"{context}\n\nCÂU HỎI: {question}"
+    user_prompt = f"{context}\n\nCÂU HỎI CỦA NHÀ ĐẦU TƯ: {question}"
 
     # Multi-provider LLM call với explicit error logging
     answer = None
@@ -31389,16 +32267,19 @@ Quy tắc:
 
     if not answer:
         log.warning(f"[ai_chat] All providers failed: {' | '.join(errors)}")
-        # Fallback: static template-based answer using market data
-        if top_buy:
-            answer = f"📊 Dựa trên phân tích kỹ thuật thị trường hôm nay {today}, đây là top mã có tín hiệu mua mạnh:\n\n"
-            for s, sc, sg, ch, sect in top_buy[:5]:
-                answer += f"• <b>{s}</b> ({sect}): Score {sc}/25, tín hiệu {sg}, {ch:+.2f}%\n"
-            answer += f"\n💡 Gợi ý chiến lược:\n• Mua thử với 20-30% vốn dự kiến\n• Đặt stop-loss 5-7% dưới giá mua\n• Theo dõi RSI + ADX trước khi tăng position\n\n⚠️ AI tạm gián đoạn → trả lời từ template. Đăng ký gói Premium để mở khóa AI assistant đầy đủ."
+        # Fallback: trả thẳng data đã lọc theo ý định (không cần LLM)
+        if context and _ctx_sources:
+            answer = (f"📊 Dựa trên dữ liệu lọc theo câu hỏi của bạn (hôm nay {today}):\n\n"
+                      + context.split('\n\n', 1)[-1][:1200]
+                      + "\n\n💡 Lưu ý: kết hợp định giá (P/E, ROE) + tín hiệu kỹ thuật + quản trị vốn (stop-loss 5-7%). "
+                      + "AI diễn giải tạm gián đoạn — xem chi tiết tại /phan-tich/<MÃ>.\n\n"
+                      + "⚠️ Tín hiệu kỹ thuật tham khảo, không phải khuyến nghị đầu tư.")
         else:
             return {'ok': False, 'error': 'AI tạm gián đoạn. Vui lòng thử lại sau ít phút hoặc liên hệ admin.'}
 
-    return {'ok': True, 'answer': answer.strip(), 'sources': [f'/phan-tich/{s[0]}' for s in top_buy[:3]]}
+    return {'ok': True, 'answer': answer.strip(),
+            'sources': [f'/phan-tich/{s}' for s in (_ctx_sources or [])[:3]],
+            'intents': _det.get('intents', [])}
 
 
 def render_ai_chat_page() -> str:
@@ -31430,12 +32311,14 @@ button{padding:14px 24px;background:#5b9dff;color:#0a0e1a;border:0;border-radius
 <div class="subtitle">Trợ lý AI dựa trên dữ liệu realtime + 25 chỉ báo kỹ thuật. Hỏi tự do về cổ phiếu Việt Nam.</div>
 
 <div class="examples">
-<div class="ex" onclick="ask(this.textContent)">Tôi có 100 triệu, nên đầu tư gì?</div>
-<div class="ex" onclick="ask(this.textContent)">Top cổ phiếu ngân hàng đáng mua?</div>
-<div class="ex" onclick="ask(this.textContent)">Có nên mua VCB không?</div>
-<div class="ex" onclick="ask(this.textContent)">Cổ phiếu nào breakout hôm nay?</div>
-<div class="ex" onclick="ask(this.textContent)">RSI quá bán có nên bắt đáy?</div>
-<div class="ex" onclick="ask(this.textContent)">Cách quản lý rủi ro 5000 USD?</div>
+<div class="ex" onclick="ask(this.textContent)">Tìm cổ phiếu giá trị đang chuẩn bị tăng giá</div>
+<div class="ex" onclick="ask(this.textContent)">Cổ phiếu định giá rẻ P/E thấp, ROE cao?</div>
+<div class="ex" onclick="ask(this.textContent)">Cổ phiếu cổ tức cao để đầu tư dài hạn?</div>
+<div class="ex" onclick="ask(this.textContent)">Cá mập đang gom cổ phiếu nào?</div>
+<div class="ex" onclick="ask(this.textContent)">Cổ phiếu ngân hàng nào đáng mua nhất?</div>
+<div class="ex" onclick="ask(this.textContent)">Tôi có 100 triệu, nên phân bổ danh mục thế nào?</div>
+<div class="ex" onclick="ask(this.textContent)">Cổ phiếu quá bán đáng bắt đáy hôm nay?</div>
+<div class="ex" onclick="ask(this.textContent)">Phân tích VCB: định giá và tín hiệu kỹ thuật</div>
 </div>
 
 <div class="chat" id="chat">
@@ -31466,42 +32349,48 @@ Hãy bắt đầu bằng cách click 1 ví dụ trên hoặc gõ câu hỏi bên
 </div>
 
 <script>
-let queryCount = parseInt(localStorage.getItem('ai_queries_today') || '0');
-let queryDay = localStorage.getItem('ai_queries_day') || '';
-const today = new Date().toISOString().substr(0,10);
-if (queryDay !== today) { queryCount = 0; localStorage.setItem('ai_queries_day', today); }
-
+/* Admin mở /ask?token=ADMIN_TOKEN một lần → lưu lại → AI luôn không giới hạn */
+try { var _sp = new URLSearchParams(location.search); if (_sp.get('token')) { localStorage.setItem('vns_admin_token', _sp.get('token')); } } catch(e){}
 function ask(q) {
   document.getElementById('q').value = q;
   document.getElementById('askForm').dispatchEvent(new Event('submit', {cancelable: true}));
+}
+function saveEmail() {
+  const el = document.getElementById('unlockEmail');
+  if (el && el.value && el.value.indexOf('@') > 0) {
+    localStorage.setItem('vns_email', el.value.trim().toLowerCase());
+    alert('Đã lưu email. Nếu gói của bạn còn hiệu lực, AI sẽ mở khoá không giới hạn — hãy hỏi lại!');
+  } else { alert('Vui lòng nhập đúng email đã mua gói.'); }
 }
 async function submitAsk(e) {
   e.preventDefault();
   const q = document.getElementById('q').value.trim();
   if (!q) return;
-  const FREE_LIMIT = 5;
-  if (queryCount >= FREE_LIMIT) {
-    if (confirm('Bạn đã dùng hết ' + FREE_LIMIT + ' câu hỏi miễn phí hôm nay. Nâng cấp Premium để hỏi không giới hạn?')) {
-      window.location = '/upgrade'; return;
-    }
-    return;
-  }
   const chat = document.getElementById('chat');
   chat.insertAdjacentHTML('beforeend', '<div class="msg user"><div class="label">🙋 Bạn</div><p>' + q.replace(/</g,'&lt;') + '</p></div>');
   chat.insertAdjacentHTML('beforeend', '<div class="msg ai" id="thinking"><div class="label">🤖 Vnstock AI</div><p class="thinking">Đang phân tích thị trường + sinh câu trả lời...</p></div>');
   chat.scrollTop = chat.scrollHeight;
   document.getElementById('btn').disabled = true; document.getElementById('q').value = '';
   try {
-    const r = await fetch('/api/ai-chat', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question: q, language: 'vi'})});
+    const email = localStorage.getItem('vns_email') || '';
+    const _hdr = {'Content-Type':'application/json'};
+    const _at = localStorage.getItem('vns_admin_token') || '';
+    if (_at) _hdr['Authorization'] = 'Bearer ' + _at;
+    const r = await fetch('/api/ai-chat', {method:'POST', headers: _hdr,
+      body: JSON.stringify({question: q, language: 'vi', email: email})});
     const data = await r.json();
     document.getElementById('thinking').remove();
     if (data.ok) {
-      queryCount++; localStorage.setItem('ai_queries_today', queryCount);
       let answerHtml = data.answer.replace(/</g,'&lt;').replace(/\\n/g, '<br>');
-      // Auto-link stock symbols
       answerHtml = answerHtml.replace(/\\b([A-Z]{3,4})\\b/g, '<a href="/phan-tich/$1">$1</a>');
-      chat.insertAdjacentHTML('beforeend', '<div class="msg ai"><div class="label">🤖 Vnstock AI · ' + (FREE_LIMIT - queryCount) + '/' + FREE_LIMIT + ' free still</div><p>' + answerHtml + '</p></div>');
+      const qd = data.quota || {};
+      let label = '🤖 Vnstock AI';
+      if (qd.is_pro) label += ' · 💎 Premium (không giới hạn)';
+      else if (qd.limit) label += ' · còn ' + Math.max(0, (qd.limit - qd.used)) + '/' + qd.limit + ' câu miễn phí hôm nay';
+      chat.insertAdjacentHTML('beforeend', '<div class="msg ai"><div class="label">' + label + '</div><p>' + answerHtml + '</p></div>');
+      if (data.limited) {
+        chat.insertAdjacentHTML('beforeend', '<div style="text-align:center;margin:14px 0;padding:16px;background:#10b98115;border:1px solid #00e67644;border-radius:10px"><a href="/upgrade?plan=pro_monthly" style="display:inline-block;padding:13px 30px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0e1a;border-radius:8px;font-weight:800;text-decoration:none;font-size:15px">💎 Nâng cấp Premium — hỏi AI không giới hạn (299k/tháng)</a><div style="margin-top:12px;font-size:13px;color:#9fb3d0">Đã mua gói? <input id="unlockEmail" placeholder="email@vidu.com" style="padding:8px 10px;border-radius:6px;border:1px solid #1e2d47;background:#0e1320;color:#e2edff;font-size:13px"> <button type="button" onclick="saveEmail()" style="padding:8px 16px;font-size:13px">Mở khoá</button></div></div>');
+      }
     } else {
       chat.insertAdjacentHTML('beforeend', '<div class="msg ai"><div class="label">⚠️ Lỗi</div><p>' + (data.error || 'Không thể trả lời') + '</p></div>');
     }
@@ -31841,7 +32730,7 @@ def _llm_background_worker():
                 weekday = int(time.strftime('%w'))  # 0=Sun, 1-5=Mon-Fri
                 if 9 <= hour <= 15 and 1 <= weekday <= 5 and get_setting('signal_bot_enabled', '1') == '1':
                     if get_setting('tg_channel_id', '') and (get_setting('tg_channel_bot_token', '') or get_setting('tg_owner_bot_token', '')):
-                        res = scan_signals_and_post_telegram(min_score=18, max_posts=2)
+                        res = scan_signals_and_post_telegram(min_score=18, max_posts=1)
                         if res.get('posted'):
                             log.info(f"[signal_bot_sched] Posted {len(res['posted'])} signals")
             except Exception as e:
@@ -31856,6 +32745,13 @@ def _llm_background_worker():
                         except Exception as de: log.warning(f"[llm_worker] Distribute weekly: {de}")
             except Exception as e:
                 log.warning(f"[llm_worker] Weekly spotlight error: {e}")
+
+            # 2b. Refresh fundamentals scan cache cho AI Analyst (mỗi ~20h)
+            try:
+                if (not _FUND_SCAN) or (time.time() - _FUND_SCAN_TS > 72000):
+                    _enrich_fundamentals_scan()
+            except Exception as e:
+                log.warning(f"[llm_worker] Fundamentals scan error: {e}")
 
             # 3. Translate next pending blog (1/hour to spread cost)
             try:
@@ -31903,7 +32799,7 @@ def _prewarm_top_stocks_worker():
     """
     import concurrent.futures as _cf_pre
     import threading as _thr_pre
-    time.sleep(15)  # Wait for server to fully start
+    time.sleep(5)  # Wait for server to fully start
 
     # Get top symbols từ sector map + watchlist
     top_syms = set()
@@ -31914,7 +32810,7 @@ def _prewarm_top_stocks_worker():
     except Exception: pass
     try:
         with get_db() as c:
-            for r in c.execute("SELECT DISTINCT symbol FROM watchlist WHERE market='VN' LIMIT 100").fetchall():
+            for r in c.execute("SELECT DISTINCT symbol FROM watchlist WHERE market='VN'").fetchall():
                 top_syms.add(r['symbol'])
     except Exception: pass
 
@@ -32401,7 +33297,7 @@ def render_en_landing() -> str:
     """English landing page /en/ — international SEO."""
     return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vnstock — AI Stock Analysis for Vietnam Market | Free Tool</title>
-<meta name="description" content="Free AI-powered stock analysis platform for Vietnam market. Real-time prices, AI signals, screener, backtest, portfolio. Used by 50,000+ traders.">
+<meta name="description" content="Free AI-powered stock analysis platform for Vietnam market. Real-time prices, AI signals, screener, backtest, portfolio. Transparent public backtest.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://vnstock.io.vn/en/">
 <link rel="alternate" hreflang="en" href="https://vnstock.io.vn/en/">
@@ -32434,7 +33330,7 @@ footer{text-align:center;margin:40px 0;font-size:12px;color:#4a6180}</style></he
 <body>
 <div class="hero">
 <h1>🇻🇳 AI Stock Analysis for Vietnam Market</h1>
-<p class="subtitle">Real-time data · AI signals · Screener · Backtest · Portfolio<br>50,000+ traders trust Vnstock — 100% free</p>
+<p class="subtitle">Real-time data · AI signals · Screener · Backtest · Portfolio<br>Free AI stock analysis for Vietnam — transparent methodology</p>
 <div class="cta-row">
 <a href="/app" class="cta">🚀 Launch App</a>
 <a href="/en/markets/vn-index" class="cta secondary">📊 VN-Index Today</a>
@@ -32442,7 +33338,7 @@ footer{text-align:center;margin:40px 0;font-size:12px;color:#4a6180}</style></he
 </div>
 <div class="features">
 <div class="feature"><h3>📊 Real-time Prices</h3><p>Direct TCBS WebSocket feed. VN30, HNX, UPCOM, all 1,500+ Vietnam stocks. Sub-second updates.</p></div>
-<div class="feature"><h3>🤖 AI Trading Signals</h3><p>Auto-analyzing 25+ technical indicators. Buy/Sell/Hold signals with score 0-10. 65-72% backtest accuracy.</p></div>
+<div class="feature"><h3>🤖 AI Trading Signals</h3><p>Auto-analyzing 25+ technical indicators. Buy/Sell signals with score /25. Transparent VN30 backtest (~2.4y) — see /methodology.</p></div>
 <div class="feature"><h3>🔍 Multi-factor Screener</h3><p>Filter by RSI, MACD, P/E, market cap, sector, volume. 20+ preset screeners (oversold, breakout, golden cross).</p></div>
 <div class="feature"><h3>📈 AFL Backtest</h3><p>Test your strategy on 5 years of Vietnam stock data. Community AFL script sharing.</p></div>
 <div class="feature"><h3>💼 Portfolio Tracker</h3><p>Track all positions with P&L, alerts, AI insights. Smart money flow detection.</p></div>
@@ -33035,7 +33931,7 @@ def _auto_generate_blog_faqs(slug: str, post: dict) -> list:
         },
         {
             "q": "Phân tích Vnstock có chính xác không?",
-            "a": "Hệ thống AI của Vnstock đạt độ chính xác 65-72% trên backtest 5 năm dữ liệu thị trường VN. Tuy nhiên không có hệ thống nào dự đoán 100% — luôn kết hợp với phân tích cơ bản, quản lý rủi ro (stop loss 2%/lệnh)."
+            "a": "Backtest VN30 công khai (~2.4 năm) của Vnstock: win rate ~36.5%, R:R 1:2.87, kỳ vọng dương +0.41R/lệnh (chi tiết tại /methodology). Tuy nhiên không có hệ thống nào dự đoán 100% — luôn kết hợp với phân tích cơ bản, quản lý rủi ro (stop loss 2%/lệnh)."
         },
         {
             "q": "Vnstock có miễn phí không?",
@@ -41849,16 +42745,24 @@ class Handler(BaseHTTPRequestHandler):
             if 'text/html' in (mime or '') and isinstance(body_bytes, (bytes, bytearray)):
                 try:
                     html_str = body_bytes.decode('utf-8')
-                    # Tránh double-inject
+                    _req_path = (getattr(self, 'path', '') or '').split('?')[0]
+                    # 🌐 Lang switcher (góc trên phải) — trang web public, KHÔNG vào /app, /admin
+                    if ('<!-- vnstock-lang-switch -->' not in html_str
+                            and not _req_path.startswith(('/app', '/admin'))
+                            and '</body>' in html_str.lower() and '<head' in html_str.lower()):
+                        _si = html_str.lower().rfind('</body>')
+                        if _si >= 0:
+                            html_str = html_str[:_si] + _get_lang_switcher_html() + html_str[_si:]
+                    # Tránh double-inject footer
                     if '<!-- vnstock-seo-footer -->' not in html_str:
                         # Chỉ inject vào full HTML page (không inject vào fragment)
                         if '</body>' in html_str.lower() and '<head' in html_str.lower():
-                            footer = _get_seo_footer_html()
+                            footer = _get_seo_footer_en_html() if _req_path.startswith('/en') else _get_seo_footer_html()
                             # Case-insensitive replace once
                             idx = html_str.lower().rfind('</body>')
                             if idx >= 0:
                                 html_str = html_str[:idx] + footer + html_str[idx:]
-                                body_bytes = html_str.encode('utf-8')
+                    body_bytes = html_str.encode('utf-8')
                 except Exception:
                     pass  # Fallback: serve original bytes
             self.send_response(status); self.cors()
@@ -43588,6 +44492,37 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
                 self.send_json([dict(r) for r in rows])
             return
         
+        # ── Bulk stock data — GET /api/stocks/bulk?syms=VCB,HPG,TCB&market=VN ──
+        if path == "/api/stocks/bulk":
+            syms_raw = qs.get("syms", [""])[0]
+            mkt_bulk = qs.get("market", ["VN"])[0].upper()
+            syms_list = [s.strip().upper() for s in syms_raw.split(",") if s.strip()][:200]
+            if not syms_list:
+                self.send_json({"error": "Thiếu syms"}, 400); return
+            import concurrent.futures as _cfb
+            result = {}
+            def _fetch_one_bulk(sym):
+                try:
+                    d = fetch(sym, mkt_bulk, force=False)
+                    if not d or not d.get('price'):
+                        return sym, None
+                    # QUAN TRỌNG: phải gọi analyze() giống /api/stock/
+                    if 'analysis' not in d or not d.get('analysis'):
+                        try:
+                            d['analysis'] = analyze(d)
+                        except Exception as _ae:
+                            log.debug("[bulk] analyze %s: %s", sym, _ae)
+                            d['analysis'] = empty_analysis()
+                    return sym, d
+                except Exception:
+                    return sym, None
+            with _cfb.ThreadPoolExecutor(max_workers=min(len(syms_list), 30)) as ex:
+                for sym, d in ex.map(_fetch_one_bulk, syms_list):
+                    if d and d.get('price'):
+                        result[sym] = d
+            self.send_json(result)
+            return
+
         # Stock data
         if path.startswith("/api/stock/"):
             sym = path.split("/")[-1].upper()
@@ -44287,6 +45222,10 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         
         # Sector Rotation
         if path == "/api/sector_rotation":
+            # 💎 Premium-only khi commercial ON (SSR /sectors gọi hàm trực tiếp, KHÔNG ảnh hưởng SEO)
+            _u_sec = self.maybe_auth() if hasattr(self, 'maybe_auth') else None
+            if not _premium_unlimited_user(_u_sec):
+                self.send_json(_upgrade_payload('Sector Rotation', {'limit': None})); return
             self.send_json(calc_sector_rotation())
             return
 
@@ -44380,6 +45319,7 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         
         # Portfolio Backtest
         if path == "/api/portfolio_backtest":
+            if _premium_only_block(self, 'Portfolio Backtest'): return
             u = self.require_auth()
             if not u: return
             cap = float(qs.get("capital", ["100000000"])[0])
@@ -44761,6 +45701,7 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         
         # ── regime_backtest GET (alias for index_Pro compatibility) ──
         if path in ("/api/regime_backtest",) or path.startswith("/api/regime_backtest"):
+            if _premium_only_block(self, 'Regime Backtest'): return
             sym2 = qs.get("symbol",[""])[0].upper()
             mkt2 = qs.get("market",["VN"])[0].upper()
             if not sym2: self.send_json({"error":"Missing symbol"},400); return
@@ -46695,13 +47636,33 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         except: self._raw_body = b""
         body = self.body()
         
-        # ── 🤖 AI Chat Assistant API ───────────────────────────
+        # ── 🤖 AI Chat Assistant API (freemium gate server-side) ──
         if path == "/api/ai-chat":
             question = body.get('question', '').strip()
             language = body.get('language', 'vi')
+            email = (body.get('email') or '').strip().lower()
             if not question:
                 self.send_json({'ok': False, 'error': 'Câu hỏi không được trống'}, 400); return
-            self.send_json(ai_chat_answer(question, language))
+            _ip = _real_client_ip(self)
+            _is_admin = False
+            try: _is_admin = _check_admin_token(self)
+            except Exception: pass
+            gate = _ai_ask_quota_check(_ip, email, is_admin=_is_admin, handler=self)
+            if not gate['allowed']:
+                self.send_json({'ok': True, 'limited': True, 'upgrade': True, 'sources': [],
+                    'answer': (f"🔒 Bạn đã dùng hết {gate['limit']} câu hỏi AI Analyst miễn phí hôm nay.\n\n"
+                               f"💎 Nâng cấp Premium để hỏi KHÔNG GIỚI HẠN — AI phân tích định giá (P/E, ROE, cổ tức) "
+                               f"kết hợp 25 chỉ báo kỹ thuật cho 1500+ mã, tư vấn danh mục như fund manager chuyên nghiệp.\n\n"
+                               f"👉 Đăng ký Premium 299k/tháng: /upgrade?plan=pro_monthly\n\n"
+                               f"Đã là thành viên? Nhập email đã mua ở ô bên dưới để mở khoá không giới hạn."),
+                    'quota': {'used': gate['used'], 'limit': gate['limit'], 'is_pro': False}})
+                return
+            res = ai_chat_answer(question, language)
+            if res.get('ok') and not res.get('limited') and not gate.get('unlimited'):
+                _ai_ask_quota_inc(_ip)
+            res['quota'] = {'used': gate['used'] + (0 if gate.get('unlimited') else 1),
+                            'limit': gate['limit'], 'is_pro': gate['is_pro']}
+            self.send_json(res)
             return
 
         # ── 📊 SEO Admin POST mirror (signal-scan + daily-seo-report) ──
@@ -46719,6 +47680,11 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
             url_param = qs.get('url', [body.get('url', '')])[0]
             urls = [url_param] if url_param else ['https://vnstock.io.vn/']
             self.send_json(google_indexing_push(urls)); return
+        if path == "/api/admin/backtest-vn30":
+            if not _check_admin_token(self): return
+            import threading as _bt_th
+            _bt_th.Thread(target=_run_vn30_backtest, daemon=True).start()
+            self.send_json({"ok": True, "msg": "Backtest VN30 đang chạy nền (~1-2 phút). Xem kết quả tại /methodology hoặc file backtest_vn30_results.json"}); return
 
         # ── PWA Push Notification ──────────────────────────────
         if path == "/api/push/subscribe":
@@ -47098,6 +48064,12 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
                 data = _ram_cache.get(symbol, {}).get('data', {})
                 price = data.get('price', 0)
             if action == 'buy':
+                # 💎 Gate (dormant khi commercial OFF) — free: 1 mã nắm giữ. Mua thêm mã CŨ vẫn OK.
+                _held = {p.get('symbol') for p in (pt.positions or [])}
+                if symbol not in _held:
+                    _pp2 = _feature_gate_user('paper', u, len(_held))
+                    if not _pp2['allowed']:
+                        self.send_json(_upgrade_payload('Paper Trading', _pp2)); return
                 success, msg = pt.buy(symbol, price, qty)
             elif action == 'sell':
                 success, msg = pt.sell(symbol, price, qty)
@@ -47264,6 +48236,15 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         
         # Backtest
         if path == "/api/backtest":
+            # 💎 Premium gate (dormant khi commercial OFF) — free 1 lần/ngày theo IP thật
+            _bt_ip = _real_client_ip(self)
+            _bt_email = (body.get('email') or '').strip().lower()
+            _bt_admin = False
+            try: _bt_admin = _check_admin_token(self)
+            except Exception: pass
+            _bt_gate = _feature_gate_daily('backtest', _bt_ip, _bt_email, _bt_admin, handler=self)
+            if not _bt_gate['allowed']:
+                self.send_json(_upgrade_payload('Backtest', _bt_gate)); return
             sym = body.get("symbol", "").upper()
             mkt = body.get("market", "US").upper()
             cap = body.get("capital", 10_000_000)
@@ -47278,11 +48259,13 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
             r["symbol"] = sym
             r["market"] = mkt
             r["bars_used"] = len(bars)
+            if not _bt_gate['unlimited']: _feature_gate_inc('backtest', _bt_ip)
             self.send_json(r)
             return
 
         # Export Backtest CSV — POST /api/export/backtest
         if path == "/api/export/backtest":
+            if _premium_only_block(self, 'Export Backtest CSV'): return
             sym_ebt = body.get("symbol", "").upper()
             mkt_ebt = body.get("market", "VN").upper()
             cap_ebt = body.get("capital", 10_000_000)
@@ -47327,6 +48310,7 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         # ── AFL Custom Backtest — POST /api/afl/backtest ──────────────────────
         # Body: { code, symbol, market?, days?, capital?, sl_pct?, tp_pct? }
         if path == "/api/afl/backtest":
+            if _premium_only_block(self, 'AFL Backtest'): return
             u_afl = self.require_auth()
             if not u_afl: return
             code_afl = (body.get("code") or "").strip()
@@ -47732,6 +48716,10 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         if path == "/api/price_alerts":
             u = self.require_auth()
             if not u: return
+            # 💎 Gate theo tài khoản (dormant khi commercial OFF) — free: 1 cảnh báo
+            _al_gate = _feature_gate_user('alerts', u, len(palert_list(u['id'])))
+            if not _al_gate['allowed']:
+                self.send_json(_upgrade_payload('Cảnh báo giá', _al_gate)); return
             sym = body.get("symbol", "").upper().strip()
             target = body.get("target_price")
             direction = body.get("direction", "ABOVE").upper()
@@ -48015,6 +49003,15 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
         if path == "/api/paper_trade/open":
             u = self.require_auth()
             if not u: return
+            # 💎 Gate theo tài khoản (dormant khi commercial OFF) — free: 1 vị thế mở
+            try:
+                with get_db() as _pc:
+                    _open_n = _pc.execute("SELECT COUNT(*) FROM paper_trades WHERE user_id=? AND status='OPEN'", (u["id"],)).fetchone()[0]
+            except Exception:
+                _open_n = 0
+            _pp_gate = _feature_gate_user('paper', u, _open_n)
+            if not _pp_gate['allowed']:
+                self.send_json(_upgrade_payload('Paper Trading', _pp_gate)); return
             paper_trade_open(u["id"], body.get("symbol","").upper(),
                 body.get("market","VN").upper(), body.get("signal","BUY"),
                 float(body.get("entry_price",0)), float(body.get("size_pct",2.0)),
@@ -48028,6 +49025,7 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
             paper_trade_close(int(tid2), float(body.get("exit_price",0)), body.get("reason","Signal"))
             self.send_json({"ok": True}); return
         if path == "/api/backtest_regime":
+            if _premium_only_block(self, 'Backtest theo Market Regime'): return
             sym2 = body.get("symbol","").upper()
             bars2 = db_load_ohlcv(sym2, OHLCV_BARS)
             if not bars2: self.send_json({"error":"No data"},404); return
@@ -48747,6 +49745,15 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
 
         # ── PAYMENT ROUTES ──────────────────────────────────────────
         # Tạo link thanh toán — support cả PayOS lẫn VietQR/SePay
+        # ── PayOS 1-click: POST /api/payment/payos/create ────────────
+        if path == "/api/payment/payos/create":
+            u = self.require_auth()
+            if not u: return
+            plan_id = body.get("plan_id", "pro_monthly").strip()
+            result = payos_create_payment(u["id"], plan_id)
+            self.send_json(result, 200 if result.get("ok") else 400)
+            return
+
         if path == "/api/payment/create":
             u = self.require_auth()
             if not u: return
@@ -48784,7 +49791,7 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
 
                 qr = vietqr_url(vns_plan, user_email, init['txn_ref'])
                 if not qr.get('configured'):
-                    self.send_json({"error": "Bank chưa cấu hình. Admin liên hệ để thanh toán trực tiếp."}, 503); return
+                    self.send_json({"error": "Bank chưa cấu hình — Admin vào Settings → Thanh toán để điền số tài khoản MSB."}, 400); return
 
                 # Return bank_transfer format (frontend đã support)
                 self.send_json({
@@ -48793,7 +49800,7 @@ a.btn-ghost{{background:transparent;border:1px solid #334155;color:#5b9dff}}</st
                     'qr_url': qr['qr_url'],
                     'bank_name': qr['bank_name'],
                     'bank_account': qr['bank_account'],
-                    'bank_owner': qr.get('bank_name', ''),  # alias
+                    'bank_owner': qr.get('bank_owner', ''),  # tên chủ TK
                     'amount': qr['amount'],
                     'transfer_content': qr['addInfo'],
                     'order_code': init['txn_ref'],
